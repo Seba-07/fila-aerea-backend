@@ -11,6 +11,17 @@ export const authenticate = (
   res: Response,
   next: NextFunction
 ): void => {
+  // DESARROLLO: bypass de autenticación - usar usuario por defecto
+  if (process.env.BYPASS_AUTH === 'true') {
+    req.user = {
+      userId: '507f1f77bcf86cd799439011', // ID temporal
+      email: 'dev@test.com',
+      rol: 'passenger',
+    };
+    next();
+    return;
+  }
+
   try {
     // Buscar token en header o cookie
     let token = req.headers.authorization?.replace('Bearer ', '');
