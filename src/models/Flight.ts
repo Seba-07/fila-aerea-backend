@@ -2,11 +2,11 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IFlight extends Document {
   aircraftId: Types.ObjectId;
-  fechaHoraProg: Date;
-  estado: 'draft' | 'abierto' | 'boarding' | 'cerrado' | 'despegado' | 'finalizado';
-  zona: string;
-  puerta?: string;
-  turno_max_permitido: number;
+  numero_tanda: number;
+  fecha_hora: Date;
+  capacidad_total: number;
+  asientos_ocupados: number;
+  estado: 'programado' | 'abierto' | 'en_curso' | 'completado' | 'cancelado';
   notas?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -19,30 +19,29 @@ const flightSchema = new Schema<IFlight>(
       ref: 'Aircraft',
       required: true,
     },
-    fechaHoraProg: {
+    numero_tanda: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    fecha_hora: {
       type: Date,
       required: true,
     },
-    estado: {
-      type: String,
-      enum: ['draft', 'abierto', 'boarding', 'cerrado', 'despegado', 'finalizado'],
-      default: 'draft',
-    },
-    zona: {
-      type: String,
-      required: true,
-      trim: true,
-      default: 'A',
-    },
-    puerta: {
-      type: String,
-      trim: true,
-    },
-    turno_max_permitido: {
+    capacidad_total: {
       type: Number,
       required: true,
-      min: 0,
+      min: 1,
+    },
+    asientos_ocupados: {
+      type: Number,
       default: 0,
+      min: 0,
+    },
+    estado: {
+      type: String,
+      enum: ['programado', 'abierto', 'en_curso', 'completado', 'cancelado'],
+      default: 'programado',
     },
     notas: {
       type: String,
@@ -55,7 +54,8 @@ const flightSchema = new Schema<IFlight>(
 );
 
 flightSchema.index({ estado: 1 });
-flightSchema.index({ fechaHoraProg: 1 });
+flightSchema.index({ fecha_hora: 1 });
 flightSchema.index({ aircraftId: 1 });
+flightSchema.index({ numero_tanda: 1 });
 
 export const Flight = mongoose.model<IFlight>('Flight', flightSchema);

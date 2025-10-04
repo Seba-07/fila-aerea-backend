@@ -1,13 +1,17 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
+export interface IPasajero {
+  nombre: string;
+  rut: string;
+}
+
 export interface ITicket extends Document {
   userId: Types.ObjectId;
   codigo_ticket: string;
-  turno_global: number;
-  estado: 'activo' | 'usado' | 'anulado';
-  cooldownUntil?: Date;
-  seatChanges: number;
-  lastSeatChangeAt?: Date;
+  pasajeros: IPasajero[];
+  cantidad_pasajeros: number;
+  flightId?: Types.ObjectId;
+  estado: 'pendiente' | 'inscrito' | 'volado' | 'cancelado';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,25 +29,33 @@ const ticketSchema = new Schema<ITicket>(
       unique: true,
       uppercase: true,
     },
-    turno_global: {
+    pasajeros: [
+      {
+        nombre: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        rut: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+      },
+    ],
+    cantidad_pasajeros: {
       type: Number,
       required: true,
       min: 1,
     },
+    flightId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Flight',
+    },
     estado: {
       type: String,
-      enum: ['activo', 'usado', 'anulado'],
-      default: 'activo',
-    },
-    cooldownUntil: {
-      type: Date,
-    },
-    seatChanges: {
-      type: Number,
-      default: 0,
-    },
-    lastSeatChangeAt: {
-      type: Date,
+      enum: ['pendiente', 'inscrito', 'volado', 'cancelado'],
+      default: 'pendiente',
     },
   },
   {
@@ -53,7 +65,7 @@ const ticketSchema = new Schema<ITicket>(
 
 ticketSchema.index({ userId: 1 });
 ticketSchema.index({ codigo_ticket: 1 });
-ticketSchema.index({ turno_global: 1 });
+ticketSchema.index({ flightId: 1 });
 ticketSchema.index({ estado: 1 });
 
 export const Ticket = mongoose.model<ITicket>('Ticket', ticketSchema);

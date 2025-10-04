@@ -10,7 +10,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
     // DESARROLLO: Modo bypass - devolver datos mock
     if (process.env.BYPASS_AUTH === 'true') {
       // Buscar un ticket real de ejemplo de la BD
-      const sampleTicket = await Ticket.findOne({ estado: 'activo' }).limit(1);
+      const sampleTicket = await Ticket.findOne({ estado: 'pendiente' }).limit(1);
 
       res.json({
         user: {
@@ -25,9 +25,10 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
           ? {
               id: sampleTicket._id,
               codigo_ticket: sampleTicket.codigo_ticket,
-              turno_global: sampleTicket.turno_global,
+              pasajeros: sampleTicket.pasajeros,
+              cantidad_pasajeros: sampleTicket.cantidad_pasajeros,
+              flightId: sampleTicket.flightId,
               estado: sampleTicket.estado,
-              cooldownUntil: sampleTicket.cooldownUntil,
             }
           : null,
       });
@@ -40,8 +41,11 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
-    // Obtener ticket asociado
-    const ticket = await Ticket.findOne({ userId: user._id, estado: 'activo' });
+    // Obtener ticket asociado (pendiente o inscrito)
+    const ticket = await Ticket.findOne({
+      userId: user._id,
+      estado: { $in: ['pendiente', 'inscrito'] },
+    });
 
     res.json({
       user: {
@@ -56,9 +60,10 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
         ? {
             id: ticket._id,
             codigo_ticket: ticket.codigo_ticket,
-            turno_global: ticket.turno_global,
+            pasajeros: ticket.pasajeros,
+            cantidad_pasajeros: ticket.cantidad_pasajeros,
+            flightId: ticket.flightId,
             estado: ticket.estado,
-            cooldownUntil: ticket.cooldownUntil,
           }
         : null,
     });

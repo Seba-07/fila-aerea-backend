@@ -1,9 +1,8 @@
 export { User, IUser } from './User';
 export { Verification, IVerification } from './Verification';
-export { Ticket, ITicket } from './Ticket';
+export { Ticket, ITicket, IPasajero } from './Ticket';
 export { Aircraft, IAircraft } from './Aircraft';
 export { Flight, IFlight } from './Flight';
-export { Seat, ISeat } from './Seat';
-export { BoardingPass, IBoardingPass } from './BoardingPass';
+export { FlightManifest, IFlightManifest, IManifestPasajero } from './FlightManifest';
 export { Notification, INotification } from './Notification';
 export { EventLog, IEventLog } from './EventLog';
