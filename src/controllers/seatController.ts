@@ -102,7 +102,7 @@ export const holdSeat = async (req: AuthRequest, res: Response): Promise<void> =
 
     // Reservar (hold) por 5 minutos
     seat.status = 'hold';
-    seat.ticketId = ticket._id;
+    seat.ticketId = ticket._id as any;
     seat.hold_expires_at = new Date(Date.now() + 5 * 60 * 1000);
     await seat.save();
 
