@@ -84,7 +84,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
       await EventLog.create({
         type: 'user_created',
         entity: 'user',
-        entityId: user._id.toString(),
+        entityId: String(user._id),
         payload: { email, nombre },
       });
     } else if (!user.verificado) {
@@ -97,7 +97,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
 
     // Generar JWT
     const token = generateToken({
-      userId: user._id.toString(),
+      userId: String(user._id),
       email: user.email,
       rol: user.rol,
     });
@@ -105,8 +105,8 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
     await EventLog.create({
       type: 'login',
       entity: 'user',
-      entityId: user._id.toString(),
-      userId: user._id.toString(),
+      entityId: String(user._id),
+      userId: String(user._id),
       payload: { email },
     });
 
