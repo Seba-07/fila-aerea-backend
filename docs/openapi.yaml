@@ -1,0 +1,580 @@
+openapi: 3.0.3
+info:
+  title: Fila Aérea API
+  description: API para gestión de filas y embarques en festival aéreo
+  version: 1.0.0
+  contact:
+    name: Fila Aérea
+servers:
+  - url: http://localhost:4000/api
+    description: Desarrollo local
+  - url: https://backend.railway.app/api
+    description: Producción
+
+tags:
+  - name: Auth
+    description: Autenticación y gestión de sesiones
+  - name: Usuario
+    description: Perfil de usuario
+  - name: Vuelos
+    description: Gestión de vuelos
+  - name: Asientos
+    description: Reserva y confirmación de asientos
+  - name: Embarque
+    description: Pases de embarque y escaneo QR
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        nombre:
+          type: string
+        email:
+          type: string
+        rol:
+          type: string
+          enum: [passenger, staff, admin]
+        verificado:
+          type: boolean
+
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: string
+        codigo_ticket:
+          type: string
+        turno_global:
+          type: integer
+        estado:
+          type: string
+          enum: [activo, usado, anulado]
+        cooldownUntil:
+          type: string
+          format: date-time
+
+    Flight:
+      type: object
+      properties:
+        _id:
+          type: string
+        aircraftId:
+          type: object
+        fechaHoraProg:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          enum: [draft, abierto, boarding, cerrado, despegado, finalizado]
+        zona:
+          type: string
+        puerta:
+          type: string
+        turno_max_permitido:
+          type: integer
+        notas:
+          type: string
+        asientosLibres:
+          type: integer
+
+    Seat:
+      type: object
+      properties:
+        seatNumber:
+          type: string
+        status:
+          type: string
+          enum: [libre, hold, confirmado, embarcado, no_show]
+        hold_expires_at:
+          type: string
+          format: date-time
+
+    BoardingPass:
+      type: object
+      properties:
+        id:
+          type: string
+        qr_token:
+          type: string
+        seatNumber:
+          type: string
+        estado:
+          type: string
+          enum: [emitido, escaneado]
+
+paths:
+  /auth/request-otp:
+    post:
+      tags: [Auth]
+      summary: Solicitar código OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Código enviado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  email:
+                    type: string
+        '400':
+          description: Email inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/verify-otp:
+    post:
+      tags: [Auth]
+      summary: Verificar código OTP y obtener JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email:
+                  type: string
+                code:
+                  type: string
+                nombre:
+                  type: string
+                  description: Requerido para nuevos usuarios
+      responses:
+        '200':
+          description: Autenticación exitosa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Código inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /me:
+    get:
+      tags: [Usuario]
+      summary: Obtener perfil y ticket del usuario autenticado
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  ticket:
+                    $ref: '#/components/schemas/Ticket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /flights:
+    get:
+      tags: [Vuelos]
+      summary: Listar vuelos
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [draft, abierto, boarding, cerrado, despegado, finalizado]
+      responses:
+        '200':
+          description: Lista de vuelos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Flight'
+
+    post:
+      tags: [Vuelos]
+      summary: Crear nuevo vuelo (Staff)
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aircraftId, fechaHoraProg]
+              properties:
+                aircraftId:
+                  type: string
+                fechaHoraProg:
+                  type: string
+                  format: date-time
+                zona:
+                  type: string
+                puerta:
+                  type: string
+                turno_max_permitido:
+                  type: integer
+                notas:
+                  type: string
+      responses:
+        '201':
+          description: Vuelo creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flight'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /flights/{id}:
+    get:
+      tags: [Vuelos]
+      summary: Obtener detalle de vuelo
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle del vuelo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Flight'
+                  - type: object
+                    properties:
+                      seats:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Seat'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Vuelos]
+      summary: Actualizar vuelo (Staff)
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                estado:
+                  type: string
+                zona:
+                  type: string
+                puerta:
+                  type: string
+                turno_max_permitido:
+                  type: integer
+                fechaHoraProg:
+                  type: string
+                  format: date-time
+                notas:
+                  type: string
+      responses:
+        '200':
+          description: Vuelo actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flight'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /flights/{id}/seats/hold:
+    post:
+      tags: [Asientos]
+      summary: Reservar asiento (hold por 5 min)
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seatNumber]
+              properties:
+                seatNumber:
+                  type: string
+      responses:
+        '200':
+          description: Asiento reservado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  seat:
+                    $ref: '#/components/schemas/Seat'
+        '403':
+          description: Turno no habilitado o cooldown activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Asiento no disponible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /flights/{id}/seats/confirm:
+    post:
+      tags: [Asientos]
+      summary: Confirmar asiento reservado
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seatNumber]
+              properties:
+                seatNumber:
+                  type: string
+      responses:
+        '200':
+          description: Asiento confirmado y boarding pass generado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  boardingPass:
+                    $ref: '#/components/schemas/BoardingPass'
+        '410':
+          description: Reserva expirada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /boarding_pass/{id}:
+    get:
+      tags: [Embarque]
+      summary: Obtener pase de embarque
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pase de embarque
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPass'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /boarding_pass/scan:
+    post:
+      tags: [Embarque]
+      summary: Escanear QR y marcar embarcado (Staff)
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qr_token]
+              properties:
+                qr_token:
+                  type: string
+      responses:
+        '200':
+          description: Embarque exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  boardingPass:
+                    type: object
+        '401':
+          description: QR inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Pase ya escaneado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /flights/{id}/no_show:
+    post:
+      tags: [Embarque]
+      summary: Marcar asiento como no-show (Staff)
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seatNumber]
+              properties:
+                seatNumber:
+                  type: string
+      responses:
+        '200':
+          description: Asiento marcado como no-show
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /flights/{id}/close:
+    post:
+      tags: [Vuelos]
+      summary: Cerrar vuelo y procesar no-shows (Staff)
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vuelo cerrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  noShowCount:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permisos insuficientes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
