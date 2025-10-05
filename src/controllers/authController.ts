@@ -1,16 +1,10 @@
 import { Request, Response } from 'express';
-import { User, Verification } from '../models';
-import { emailService } from '../services/emailService';
+import { User } from '../models';
 import { generateToken } from '../utils/jwt';
 import { logger } from '../utils/logger';
 import { EventLog } from '../models/EventLog';
 
-// Genera código OTP de 6 dígitos
-const generateOTP = (): string => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
-export const requestOTP = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
 
@@ -19,81 +13,13 @@ export const requestOTP = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const code = generateOTP();
-
-    // Guardar código en DB
-    await Verification.create({
-      email: email.toLowerCase(),
-      code,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min
-    });
-
-    // Enviar email
-    await emailService.sendOTP(email, code);
-
-    await EventLog.create({
-      type: 'otp_request',
-      entity: 'verification',
-      payload: { email },
-    });
-
-    res.json({ message: 'Código enviado al email', email });
-  } catch (error: any) {
-    logger.error('Error en requestOTP:', error);
-    res.status(500).json({ error: 'Error al enviar código' });
-  }
-};
-
-export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, code, nombre } = req.body;
-
-    if (!email || !code) {
-      res.status(400).json({ error: 'Email y código son obligatorios' });
-      return;
-    }
-
-    // Buscar verificación válida
-    const verification = await Verification.findOne({
-      email: email.toLowerCase(),
-      code,
-      expiresAt: { $gt: new Date() },
-    });
-
-    if (!verification) {
-      res.status(401).json({ error: 'Código inválido o expirado' });
-      return;
-    }
-
-    // Buscar o crear usuario
-    let user = await User.findOne({ email: email.toLowerCase() });
+    // Buscar usuario
+    const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
-      if (!nombre) {
-        res.status(400).json({ error: 'El nombre es obligatorio para nuevos usuarios' });
-        return;
-      }
-
-      user = await User.create({
-        nombre,
-        email: email.toLowerCase(),
-        verificado: true,
-        rol: 'passenger',
-      });
-
-      await EventLog.create({
-        type: 'user_created',
-        entity: 'user',
-        entityId: String(user._id),
-        payload: { email, nombre },
-      });
-    } else if (!user.verificado) {
-      user.verificado = true;
-      await user.save();
+      res.status(404).json({ error: 'Usuario no encontrado' });
+      return;
     }
-
-    // Eliminar verificación usada
-    await Verification.deleteOne({ _id: verification._id });
 
     // Generar JWT
     const token = generateToken({
@@ -129,8 +55,8 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error: any) {
-    logger.error('Error en verifyOTP:', error);
-    res.status(500).json({ error: 'Error al verificar código' });
+    logger.error('Error en login:', error);
+    res.status(500).json({ error: 'Error al iniciar sesión' });
   }
 };
 

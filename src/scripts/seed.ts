@@ -21,31 +21,27 @@ const seed = async () => {
 
     logger.info('🗑️  Datos anteriores eliminados');
 
-    // Crear usuarios
-    const usuarios = [];
-    for (let i = 1; i <= 10; i++) {
-      usuarios.push({
-        nombre: `Usuario ${i}`,
-        email: `usuario${i}@test.com`,
+    // Crear usuarios de prueba
+    const usuarios = [
+      {
+        nombre: 'Pasajero 1',
+        email: 'pasajero1@test.com',
         verificado: true,
         rol: 'passenger',
-      });
-    }
-
-    // Agregar staff
-    usuarios.push({
-      nombre: 'Staff Demo',
-      email: 'staff@test.com',
-      verificado: true,
-      rol: 'staff',
-    });
-
-    usuarios.push({
-      nombre: 'Admin Demo',
-      email: 'admin@test.com',
-      verificado: true,
-      rol: 'admin',
-    });
+      },
+      {
+        nombre: 'Pasajero 2',
+        email: 'pasajero2@test.com',
+        verificado: true,
+        rol: 'passenger',
+      },
+      {
+        nombre: 'Staff',
+        email: 'staff@test.com',
+        verificado: true,
+        rol: 'staff',
+      },
+    ];
 
     const usersCreated = await User.insertMany(usuarios);
     logger.info(`✅ ${usersCreated.length} usuarios creados`);
@@ -96,11 +92,11 @@ const seed = async () => {
     const flightsCreated = await Flight.insertMany(vuelos);
     logger.info(`✅ ${flightsCreated.length} tandas creadas (10 por avión)`);
 
-    // Crear algunos tickets de ejemplo (sin inscribir)
+    // Crear tickets para los pasajeros
     const passengerUsers = usersCreated.filter((u) => u.rol === 'passenger');
     const tickets = [];
 
-    // Ticket individual
+    // Ticket individual para Pasajero 1
     tickets.push({
       userId: passengerUsers[0]._id,
       codigo_ticket: 'TIX000001',
@@ -114,7 +110,7 @@ const seed = async () => {
       estado: 'pendiente',
     });
 
-    // Ticket pareja
+    // Ticket pareja para Pasajero 2
     tickets.push({
       userId: passengerUsers[1]._id,
       codigo_ticket: 'TIX000002',
@@ -132,43 +128,19 @@ const seed = async () => {
       estado: 'pendiente',
     });
 
-    // Ticket triple
-    tickets.push({
-      userId: passengerUsers[2]._id,
-      codigo_ticket: 'TIX000003',
-      pasajeros: [
-        {
-          nombre: 'Ana López',
-          rut: '55667788-9',
-        },
-        {
-          nombre: 'Carlos López',
-          rut: '99887766-5',
-        },
-        {
-          nombre: 'Sofía López',
-          rut: '44332211-0',
-        },
-      ],
-      cantidad_pasajeros: 3,
-      estado: 'pendiente',
-    });
-
     await Ticket.insertMany(tickets);
-    logger.info(`✅ ${tickets.length} tickets creados (1 individual, 1 pareja, 1 triple)`);
+    logger.info(`✅ ${tickets.length} tickets creados (1 individual, 1 pareja)`);
 
     logger.info('\n📋 RESUMEN:');
-    logger.info(`   - ${usersCreated.length} usuarios (10 pasajeros + 2 staff)`);
+    logger.info(`   - ${usersCreated.length} usuarios (2 pasajeros + 1 staff)`);
     logger.info(`   - 2 Cessna 172 (CC-PAT y CC-SKE, capacidad 3 c/u)`);
     logger.info(`   - ${flightsCreated.length} tandas programadas`);
-    logger.info(`   - ${tickets.length} tickets de ejemplo`);
+    logger.info(`   - ${tickets.length} tickets (1 individual, 1 pareja)`);
     logger.info('\n🔐 CREDENCIALES DE PRUEBA:');
-    logger.info('   Pasajero: usuario1@test.com (ticket individual)');
-    logger.info('   Pasajero: usuario2@test.com (ticket pareja)');
-    logger.info('   Pasajero: usuario3@test.com (ticket triple)');
+    logger.info('   Pasajero 1: pasajero1@test.com (ticket individual)');
+    logger.info('   Pasajero 2: pasajero2@test.com (ticket pareja)');
     logger.info('   Staff: staff@test.com');
-    logger.info('   Admin: admin@test.com');
-    logger.info('\n💡 Los pasajeros deben inscribirse en una tanda disponible\n');
+    logger.info('\n💡 Login solo requiere email, sin código OTP\n');
 
     process.exit(0);
   } catch (error) {
