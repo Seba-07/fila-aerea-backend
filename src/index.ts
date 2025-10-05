@@ -13,7 +13,6 @@ import { globalLimiter } from './middlewares/rateLimiter';
 import { errorHandler } from './middlewares/errorHandler';
 import routes from './routes';
 import { initSocket } from './sockets';
-import { startReleaseExpiredHolds } from './jobs/releaseExpiredHolds';
 
 const app = express();
 const server = createServer(app);
@@ -63,9 +62,6 @@ const startServer = async () => {
 
     // Inicializar Socket.IO
     initSocket(server);
-
-    // Iniciar jobs
-    startReleaseExpiredHolds();
 
     // Iniciar servidor
     server.listen(PORT, () => {
