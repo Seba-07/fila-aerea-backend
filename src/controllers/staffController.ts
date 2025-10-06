@@ -499,10 +499,15 @@ export const createTanda = async (
     const flights = [];
 
     for (const aircraftId of aircraftIds) {
-      // Verificar que el avión no esté ya en la tanda
-      const existingFlight = await Flight.findOne({ numero_tanda, aircraftId });
+      // Verificar que el avión no esté ya en la tanda con estado activo
+      // (ignorar vuelos reprogramados o cancelados)
+      const existingFlight = await Flight.findOne({
+        numero_tanda,
+        aircraftId,
+        estado: { $in: ['abierto', 'en_vuelo', 'finalizado'] }
+      });
       if (existingFlight) {
-        continue; // Saltar aviones que ya están en la tanda
+        continue; // Saltar aviones que ya están en la tanda activamente
       }
 
       const aircraft = await Aircraft.findById(aircraftId);
