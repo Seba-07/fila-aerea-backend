@@ -151,6 +151,51 @@ export const getPassengers = async (
   }
 };
 
+// Obtener pasajeros con tickets sin inscribir
+export const getPassengersWithoutFlight = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    // Buscar tickets que tengan pasajeros pero no estén inscritos en un vuelo
+    const ticketsSinVuelo = await Ticket.find({
+      pasajeros: { $exists: true, $not: { $size: 0 } },
+      $or: [
+        { flightId: { $exists: false } },
+        { flightId: null },
+        { estado: 'disponible' },
+      ]
+    }).populate('userId');
+
+    // Agrupar por usuario
+    const pasajerosPorUsuario: any = {};
+
+    for (const ticket of ticketsSinVuelo) {
+      const userId = String((ticket.userId as any)._id);
+
+      if (!pasajerosPorUsuario[userId]) {
+        pasajerosPorUsuario[userId] = {
+          userId,
+          userName: (ticket.userId as any).nombre,
+          userEmail: (ticket.userId as any).email,
+          tickets: [],
+        };
+      }
+
+      pasajerosPorUsuario[userId].tickets.push({
+        ticketId: ticket._id,
+        pasajeros: ticket.pasajeros,
+        estado: ticket.estado,
+      });
+    }
+
+    res.json(Object.values(pasajerosPorUsuario));
+  } catch (error: any) {
+    logger.error('Error en getPassengersWithoutFlight:', error);
+    res.status(500).json({ error: 'Error al obtener pasajeros sin vuelo' });
+  }
+};
+
 // Editar información del pasajero
 export const updatePassenger = async (
   req: AuthRequest,
