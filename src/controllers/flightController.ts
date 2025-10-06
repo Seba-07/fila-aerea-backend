@@ -238,14 +238,40 @@ export const rescheduleFlightToNextTanda = async (
         return;
       }
 
-      // Buscar la tanda más alta para crear la siguiente
-      const maxTandaFlight = await Flight.findOne().sort({ numero_tanda: -1 });
-      const nuevaTandaNum = maxTandaFlight ? maxTandaFlight.numero_tanda + 1 : tandaSiguiente + 1;
+      // Buscar la primera tanda disponible donde este avión NO tenga un vuelo
+      let nuevaTandaNum = tandaSiguiente + 1;
+      let tandaDisponibleEncontrada = false;
 
-      // Calcular fecha para la nueva tanda (1 hora después de la última tanda)
-      const lastTandaDate = maxTandaFlight ? maxTandaFlight.fecha_hora : anyNextTanda.fecha_hora;
-      const nuevaFecha = new Date(lastTandaDate);
-      nuevaFecha.setHours(nuevaFecha.getHours() + 1);
+      while (!tandaDisponibleEncontrada) {
+        const existeVueloEnTanda = await Flight.findOne({
+          aircraftId,
+          numero_tanda: nuevaTandaNum,
+          estado: 'abierto',
+        });
+
+        if (!existeVueloEnTanda) {
+          tandaDisponibleEncontrada = true;
+        } else {
+          nuevaTandaNum++;
+        }
+      }
+
+      // Buscar la fecha de esta tanda, o usar la última + 1 hora
+      const tandaConFecha = await Flight.findOne({
+        numero_tanda: nuevaTandaNum,
+        estado: 'abierto',
+      });
+
+      let nuevaFecha: Date;
+      if (tandaConFecha) {
+        nuevaFecha = tandaConFecha.fecha_hora;
+      } else {
+        // Si no existe la tanda, calcular 1 hora después de la última
+        const maxTandaFlight = await Flight.findOne().sort({ numero_tanda: -1 });
+        const lastTandaDate = maxTandaFlight ? maxTandaFlight.fecha_hora : anyNextTanda.fecha_hora;
+        nuevaFecha = new Date(lastTandaDate);
+        nuevaFecha.setHours(nuevaFecha.getHours() + 1);
+      }
 
       const oldFlightId = nextTandaFlight._id;
       const oldTandaNum = nextTandaFlight.numero_tanda;
