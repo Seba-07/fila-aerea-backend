@@ -120,3 +120,54 @@ export const updateFlightStatus = async (
     res.status(500).json({ error: 'Error al actualizar estado' });
   }
 };
+
+export const updateFlightCapacity = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { capacidad_total } = req.body;
+
+    if (!capacidad_total || capacidad_total < 1) {
+      res.status(400).json({ error: 'Capacidad debe ser mayor a 0' });
+      return;
+    }
+
+    const flight = await Flight.findById(id);
+    if (!flight) {
+      res.status(404).json({ error: 'Vuelo no encontrado' });
+      return;
+    }
+
+    if (capacidad_total < flight.asientos_ocupados) {
+      res.status(400).json({
+        error: `No se puede reducir la capacidad a ${capacidad_total}. Ya hay ${flight.asientos_ocupados} asientos ocupados.`,
+      });
+      return;
+    }
+
+    const oldCapacity = flight.capacidad_total;
+    flight.capacidad_total = capacidad_total;
+    await flight.save();
+
+    await EventLog.create({
+      type: 'flight_capacity_updated',
+      entity: 'flight',
+      entityId: flight._id.toString(),
+      userId: req.user?.userId,
+      payload: { old_capacity: oldCapacity, new_capacity: capacidad_total },
+    });
+
+    const io = getIO();
+    io.emit('flightUpdated', {
+      flightId: flight._id,
+      capacidad_total: flight.capacidad_total,
+    });
+
+    res.json({ message: 'Capacidad actualizada', flight });
+  } catch (error: any) {
+    logger.error('Error en updateFlightCapacity:', error);
+    res.status(500).json({ error: 'Error al actualizar capacidad' });
+  }
+};

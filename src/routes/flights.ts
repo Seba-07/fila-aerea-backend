@@ -3,6 +3,7 @@ import {
   getFlights,
   getFlightById,
   updateFlightStatus,
+  updateFlightCapacity,
 } from '../controllers/flightController';
 import { authenticate, requireStaff } from '../middlewares/auth';
 
@@ -15,5 +16,6 @@ router.get('/:id', authenticate, getFlightById);
 // Rutas de staff
 router.patch('/:id/status', authenticate, requireStaff, updateFlightStatus);
 router.patch('/:id', authenticate, requireStaff, updateFlightStatus); // Alias para compatibilidad
+router.patch('/:id/capacity', authenticate, requireStaff, updateFlightCapacity);
 
 export default router;

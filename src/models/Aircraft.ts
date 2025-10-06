@@ -4,6 +4,7 @@ export interface IAircraft extends Document {
   matricula: string;
   modelo: string;
   capacidad: number;
+  habilitado: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,6 +27,10 @@ const aircraftSchema = new Schema<IAircraft>(
       required: true,
       min: 1,
       max: 10,
+    },
+    habilitado: {
+      type: Boolean,
+      default: true,
     },
   },
   {
