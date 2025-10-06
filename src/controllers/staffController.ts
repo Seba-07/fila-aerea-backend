@@ -435,8 +435,10 @@ export const getPayments = async (
       };
     });
 
-    // Total recaudado (todos los pagos positivos y negativos)
-    const totalRecaudado = payments.reduce((sum, p) => sum + p.monto, 0);
+    // Total recaudado (solo pagos tipo 'compra' y 'ajuste_positivo')
+    const totalRecaudado = payments
+      .filter(p => p.tipo === 'compra' || p.tipo === 'ajuste_positivo')
+      .reduce((sum, p) => sum + p.monto, 0);
 
     // Dinero confirmado: solo de tickets que han volado (estado 'volado')
     const allTickets = await Ticket.find({ estado: 'volado' }).populate('userId');
@@ -444,7 +446,10 @@ export const getPayments = async (
 
     let totalConfirmado = 0;
     for (const userId of confirmedUserIds) {
-      const userPayments = await Payment.find({ userId });
+      const userPayments = await Payment.find({
+        userId,
+        tipo: { $in: ['compra', 'ajuste_positivo'] }
+      });
       const userTotal = userPayments.reduce((sum, p) => sum + p.monto, 0);
 
       // Solo contar si el usuario tiene al menos 1 ticket volado
@@ -454,11 +459,16 @@ export const getPayments = async (
       }
     }
 
+    // Pendiente devolución: solo pagos tipo 'devolucion' y 'ajuste_negativo' (valores negativos)
+    const totalDevoluciones = payments
+      .filter(p => p.tipo === 'devolucion' || p.tipo === 'ajuste_negativo')
+      .reduce((sum, p) => sum + Math.abs(p.monto), 0);
+
     res.json({
       payments: paymentsFormatted,
       total_recaudado: totalRecaudado,
       total_confirmado: totalConfirmado,
-      pendiente_devolucion: totalRecaudado - totalConfirmado,
+      pendiente_devolucion: totalDevoluciones,
     });
   } catch (error: any) {
     logger.error('Error en getPayments:', error);
