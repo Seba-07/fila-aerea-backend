@@ -217,7 +217,9 @@ export const rescheduleFlightToNextTanda = async (
       return;
     }
 
-    const tandaSiguiente = anyNextTanda.numero_tanda;
+    let tandaSiguiente = anyNextTanda.numero_tanda;
+    let nuevaTandaCreada = false;
+    let tandaDesplazada = null;
 
     // Verificar si este avión ya tiene un vuelo en la siguiente tanda
     let nextTandaFlight = await Flight.findOne({
@@ -226,8 +228,47 @@ export const rescheduleFlightToNextTanda = async (
       estado: 'abierto',
     });
 
-    // Si no existe, crear el vuelo para este avión en la siguiente tanda
-    if (!nextTandaFlight) {
+    // Si el avión ya existe en la siguiente tanda, mover ese vuelo a una nueva tanda
+    if (nextTandaFlight && nextTandaFlight.asientos_ocupados === 0) {
+      const { Aircraft } = await import('../models');
+      const aircraft = await Aircraft.findById(aircraftId);
+
+      if (!aircraft) {
+        res.status(404).json({ error: 'Avión no encontrado' });
+        return;
+      }
+
+      // Buscar la tanda más alta para crear la siguiente
+      const maxTandaFlight = await Flight.findOne().sort({ numero_tanda: -1 });
+      const nuevaTandaNum = maxTandaFlight ? maxTandaFlight.numero_tanda + 1 : tandaSiguiente + 1;
+
+      // Calcular fecha para la nueva tanda (1 hora después de la última tanda)
+      const lastTandaDate = maxTandaFlight ? maxTandaFlight.fecha_hora : anyNextTanda.fecha_hora;
+      const nuevaFecha = new Date(lastTandaDate);
+      nuevaFecha.setHours(nuevaFecha.getHours() + 1);
+
+      // Mover el vuelo existente a la nueva tanda
+      nextTandaFlight.numero_tanda = nuevaTandaNum;
+      nextTandaFlight.fecha_hora = nuevaFecha;
+      await nextTandaFlight.save();
+
+      nuevaTandaCreada = true;
+      tandaDesplazada = {
+        numero_tanda: nuevaTandaNum,
+        matricula: aircraft.matricula,
+      };
+
+      // Ahora crear el vuelo para el avión actual en la tanda siguiente
+      nextTandaFlight = await Flight.create({
+        aircraftId,
+        numero_tanda: tandaSiguiente,
+        fecha_hora: anyNextTanda.fecha_hora,
+        capacidad_total: aircraft.capacidad,
+        asientos_ocupados: 0,
+        estado: 'abierto',
+      });
+    } else if (!nextTandaFlight) {
+      // Si no existe, crear el vuelo para este avión en la siguiente tanda
       const { Aircraft } = await import('../models');
       const aircraft = await Aircraft.findById(aircraftId);
 
@@ -294,6 +335,29 @@ export const rescheduleFlightToNextTanda = async (
     flight.razon_reprogramacion = razon;
     await flight.save();
 
+    // Si la razón es combustible, crear notificación de reabastecimiento para staff
+    if (razon === 'combustible') {
+      const { User, Notification } = await import('../models');
+      const staffUsers = await User.find({ rol: 'staff' });
+
+      const aircraft = await import('../models').then(m => m.Aircraft.findById(aircraftId));
+
+      for (const staffUser of staffUsers) {
+        await Notification.create({
+          userId: staffUser._id,
+          tipo: 'reabastecimiento_pendiente',
+          titulo: 'Reabastecimiento Pendiente',
+          mensaje: `El avión ${aircraft?.matricula} fue reprogramado por falta de combustible. Debes registrar el reabastecimiento en el sistema.`,
+          metadata: {
+            aircraftId: aircraftId.toString(),
+            flightId: flight._id.toString(),
+            matricula: aircraft?.matricula,
+            razon: 'combustible',
+          },
+        });
+      }
+    }
+
     await EventLog.create({
       type: 'flight_rescheduled',
       entity: 'flight',
@@ -303,6 +367,8 @@ export const rescheduleFlightToNextTanda = async (
         tanda_anterior: tandaActual,
         tanda_nueva: tandaSiguiente,
         pasajeros_afectados: ticketsAfectados.length,
+        nueva_tanda_creada: nuevaTandaCreada,
+        tanda_desplazada: tandaDesplazada,
       },
     });
 
@@ -311,12 +377,25 @@ export const rescheduleFlightToNextTanda = async (
       flightId: flight._id,
       tanda_anterior: tandaActual,
       tanda_nueva: tandaSiguiente,
+      nueva_tanda_creada: nuevaTandaCreada,
+      tanda_desplazada: tandaDesplazada,
     });
 
+    let message = 'Vuelo reprogramado exitosamente';
+    if (nuevaTandaCreada && tandaDesplazada) {
+      message += `. Se creó la Tanda #${tandaDesplazada.numero_tanda} con el vuelo ${tandaDesplazada.matricula} que estaba en la Tanda #${tandaSiguiente}`;
+    }
+    if (razon === 'combustible') {
+      message += '. IMPORTANTE: Debes registrar el reabastecimiento del avión en el sistema.';
+    }
+
     res.json({
-      message: 'Vuelo reprogramado exitosamente',
+      message,
       pasajeros_afectados: ticketsAfectados.length,
       tanda_nueva: tandaSiguiente,
+      nueva_tanda_creada: nuevaTandaCreada,
+      tanda_desplazada: tandaDesplazada,
+      requiere_reabastecimiento: razon === 'combustible',
       tickets: ticketsAfectados.map(t => ({
         ticketId: t._id,
         pasajero: t.pasajeros[0]?.nombre,
