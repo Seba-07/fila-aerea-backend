@@ -453,7 +453,7 @@ export const createTanda = async (
         fecha_hora: new Date(fecha_hora),
         capacidad_total: aircraft.capacidad,
         asientos_ocupados: 0,
-        estado: 'programado',
+        estado: 'abierto',
       });
     }
 

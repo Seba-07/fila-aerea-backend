@@ -84,7 +84,7 @@ export const toggleAircraftStatus = async (
     // Verificar si tiene vuelos realizados
     const flightsWithAircraft = await Flight.find({
       aircraftId,
-      estado: { $in: ['boarding', 'en_vuelo', 'finalizado'] },
+      estado: { $in: ['en_vuelo', 'finalizado'] },
     });
 
     if (flightsWithAircraft.length > 0 && aircraft.habilitado) {
@@ -142,10 +142,10 @@ export const updateAircraftCapacity = async (
     aircraft.capacidad = capacidad;
     await aircraft.save();
 
-    // Actualizar capacidad_total de vuelos no realizados (programado o abierto)
+    // Actualizar capacidad_total de vuelos no realizados (solo abierto)
     const vuelosActualizables = await Flight.find({
       aircraftId,
-      estado: { $in: ['programado', 'abierto'] },
+      estado: 'abierto',
     });
 
     for (const vuelo of vuelosActualizables) {

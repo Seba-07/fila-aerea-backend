@@ -7,3 +7,4 @@ export { FlightManifest, IFlightManifest, IManifestPasajero } from './FlightMani
 export { Notification, INotification } from './Notification';
 export { EventLog, IEventLog } from './EventLog';
 export { Payment, IPayment } from './Payment';
+export { Refueling, IRefueling } from './Refueling';

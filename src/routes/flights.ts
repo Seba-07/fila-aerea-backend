@@ -4,6 +4,7 @@ import {
   getFlightById,
   updateFlightStatus,
   updateFlightCapacity,
+  rescheduleFlightToNextTanda,
 } from '../controllers/flightController';
 import { authenticate, requireStaff } from '../middlewares/auth';
 
@@ -17,5 +18,6 @@ router.get('/:id', authenticate, getFlightById);
 router.patch('/:id/status', authenticate, requireStaff, updateFlightStatus);
 router.patch('/:id', authenticate, requireStaff, updateFlightStatus); // Alias para compatibilidad
 router.patch('/:id/capacity', authenticate, requireStaff, updateFlightCapacity);
+router.post('/:id/reschedule', authenticate, requireStaff, rescheduleFlightToNextTanda);
 
 export default router;

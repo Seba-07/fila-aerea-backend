@@ -6,7 +6,7 @@ export interface IFlight extends Document {
   fecha_hora: Date;
   capacidad_total: number;
   asientos_ocupados: number;
-  estado: 'programado' | 'abierto' | 'en_curso' | 'completado' | 'cancelado';
+  estado: 'abierto' | 'en_vuelo' | 'finalizado' | 'reprogramado';
   notas?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -40,8 +40,8 @@ const flightSchema = new Schema<IFlight>(
     },
     estado: {
       type: String,
-      enum: ['programado', 'abierto', 'en_curso', 'completado', 'cancelado'],
-      default: 'programado',
+      enum: ['abierto', 'en_vuelo', 'finalizado', 'reprogramado'],
+      default: 'abierto',
     },
     notas: {
       type: String,

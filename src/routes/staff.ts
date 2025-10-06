@@ -16,6 +16,11 @@ import {
   updateAircraftCapacity,
   toggleAircraftStatus,
 } from '../controllers/aircraftController';
+import {
+  createRefueling,
+  getRefuelingsByAircraft,
+  getAllRefuelings,
+} from '../controllers/refuelingController';
 import { authenticate, requireStaff } from '../middlewares/auth';
 
 const router = Router();
@@ -38,5 +43,10 @@ router.get('/aircrafts', authenticate, requireStaff, getAircrafts);
 router.post('/aircrafts', authenticate, requireStaff, createAircraft);
 router.patch('/aircrafts/:aircraftId/capacity', authenticate, requireStaff, updateAircraftCapacity);
 router.patch('/aircrafts/:aircraftId/toggle', authenticate, requireStaff, toggleAircraftStatus);
+
+// Reabastecimientos
+router.post('/refuelings', authenticate, requireStaff, createRefueling);
+router.get('/refuelings', authenticate, requireStaff, getAllRefuelings);
+router.get('/refuelings/:aircraftId', authenticate, requireStaff, getRefuelingsByAircraft);
 
 export default router;
