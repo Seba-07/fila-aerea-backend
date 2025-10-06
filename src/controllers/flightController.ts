@@ -178,6 +178,14 @@ export const rescheduleFlightToNextTanda = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
+    const { razon } = req.body;
+
+    if (!razon || !['combustible', 'meteorologia', 'mantenimiento'].includes(razon)) {
+      res.status(400).json({
+        error: 'Debes especificar una razón válida: combustible, meteorologia o mantenimiento',
+      });
+      return;
+    }
 
     const flight = await Flight.findById(id).populate('aircraftId');
     if (!flight) {
@@ -281,8 +289,9 @@ export const rescheduleFlightToNextTanda = async (
       });
     }
 
-    // Marcar vuelo como reprogramado (pero no mover pasajeros aún)
+    // Marcar vuelo como reprogramado con razón (pero no mover pasajeros aún)
     flight.estado = 'reprogramado';
+    flight.razon_reprogramacion = razon;
     await flight.save();
 
     await EventLog.create({
@@ -317,6 +326,102 @@ export const rescheduleFlightToNextTanda = async (
   } catch (error: any) {
     logger.error('Error en rescheduleFlight:', error);
     res.status(500).json({ error: 'Error al reprogramar vuelo' });
+  }
+};
+
+export const cancelAircraftForDay = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const flight = await Flight.findById(id).populate('aircraftId');
+    if (!flight) {
+      res.status(404).json({ error: 'Vuelo no encontrado' });
+      return;
+    }
+
+    const aircraftId = flight.aircraftId;
+    const tandaActual = flight.numero_tanda;
+
+    // Buscar todos los vuelos del mismo avión en tandas futuras (mismo día o posteriores)
+    const futureFlights = await Flight.find({
+      aircraftId,
+      numero_tanda: { $gte: tandaActual },
+      estado: 'abierto',
+    }).sort({ numero_tanda: 1 });
+
+    if (futureFlights.length === 0) {
+      res.status(404).json({ error: 'No hay vuelos futuros para cancelar' });
+      return;
+    }
+
+    // Obtener todos los tickets afectados de todos los vuelos
+    const { Ticket, Notification } = await import('../models');
+    let totalTicketsAfectados = 0;
+
+    for (const futFlight of futureFlights) {
+      const ticketsAfectados = await Ticket.find({
+        flightId: futFlight._id,
+        estado: { $in: ['asignado', 'inscrito'] },
+      }).populate('userId');
+
+      // Liberar tickets
+      for (const ticket of ticketsAfectados) {
+        ticket.estado = 'disponible';
+        ticket.flightId = undefined;
+        await ticket.save();
+
+        // Notificar al pasajero
+        await Notification.create({
+          userId: ticket.userId,
+          tipo: 'cancelacion',
+          titulo: 'Vuelo Cancelado',
+          mensaje: `El avión ${(aircraftId as any).matricula} ha sido cancelado para el resto del día. Tu ticket ha sido liberado y puedes inscribirte en otro vuelo.`,
+          metadata: {
+            ticketId: ticket._id.toString(),
+            tanda_cancelada: futFlight.numero_tanda,
+            avion: (aircraftId as any).matricula,
+          },
+        });
+
+        totalTicketsAfectados++;
+      }
+
+      // Marcar vuelo como cancelado
+      futFlight.estado = 'cancelado';
+      futFlight.razon_reprogramacion = 'cancelacion_dia';
+      futFlight.asientos_ocupados = 0;
+      await futFlight.save();
+    }
+
+    await EventLog.create({
+      type: 'aircraft_cancelled_for_day',
+      entity: 'flight',
+      entityId: flight._id.toString(),
+      userId: req.user?.userId,
+      payload: {
+        aircraftId: String(aircraftId),
+        vuelos_cancelados: futureFlights.length,
+        pasajeros_afectados: totalTicketsAfectados,
+      },
+    });
+
+    const io = getIO();
+    io.emit('aircraftCancelledForDay', {
+      aircraftId,
+      vuelos_cancelados: futureFlights.map(f => f._id),
+    });
+
+    res.json({
+      message: `Avión cancelado por el día. ${futureFlights.length} vuelo(s) cancelado(s)`,
+      vuelos_cancelados: futureFlights.length,
+      pasajeros_afectados: totalTicketsAfectados,
+    });
+  } catch (error: any) {
+    logger.error('Error en cancelAircraftForDay:', error);
+    res.status(500).json({ error: 'Error al cancelar avión' });
   }
 };
 
