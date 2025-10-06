@@ -230,7 +230,7 @@ export const rescheduleFlightToNextTanda = async (
 
     // Si el avión ya existe en la siguiente tanda, mover ese vuelo a una nueva tanda
     if (nextTandaFlight && nextTandaFlight.asientos_ocupados === 0) {
-      const { Aircraft } = await import('../models');
+      const { Aircraft, Ticket } = await import('../models');
       const aircraft = await Aircraft.findById(aircraftId);
 
       if (!aircraft) {
@@ -247,10 +247,46 @@ export const rescheduleFlightToNextTanda = async (
       const nuevaFecha = new Date(lastTandaDate);
       nuevaFecha.setHours(nuevaFecha.getHours() + 1);
 
+      const oldFlightId = nextTandaFlight._id;
+      const oldTandaNum = nextTandaFlight.numero_tanda;
+
       // Mover el vuelo existente a la nueva tanda
       nextTandaFlight.numero_tanda = nuevaTandaNum;
       nextTandaFlight.fecha_hora = nuevaFecha;
       await nextTandaFlight.save();
+
+      // Mover también los pasajeros de ese vuelo (si los hay)
+      const ticketsDesplazados = await Ticket.find({
+        flightId: oldFlightId,
+        estado: { $in: ['asignado', 'inscrito'] },
+      }).populate('userId');
+
+      // Marcar con reprogramación pendiente a los pasajeros desplazados
+      for (const ticket of ticketsDesplazados) {
+        ticket.reprogramacion_pendiente = {
+          nuevo_flightId: nextTandaFlight._id as any,
+          numero_tanda_anterior: oldTandaNum,
+          numero_tanda_nueva: nuevaTandaNum,
+          fecha_reprogramacion: new Date(),
+        };
+        await ticket.save();
+
+        // Notificar al pasajero desplazado
+        const { Notification } = await import('../models');
+        await Notification.create({
+          userId: ticket.userId,
+          tipo: 'reprogramacion',
+          titulo: 'Vuelo Reprogramado en Cascada',
+          mensaje: `Tu vuelo de la tanda ${oldTandaNum} ha sido reprogramado a la tanda ${nuevaTandaNum} debido a ajustes en la programación. Por favor acepta o rechaza la reprogramación.`,
+          metadata: {
+            ticketId: ticket._id.toString(),
+            tanda_anterior: oldTandaNum,
+            tanda_nueva: nuevaTandaNum,
+          },
+        });
+      }
+
+      logger.info(`Vuelo desplazado de tanda ${oldTandaNum} a ${nuevaTandaNum} con ${ticketsDesplazados.length} pasajeros`);
 
       nuevaTandaCreada = true;
       tandaDesplazada = {
