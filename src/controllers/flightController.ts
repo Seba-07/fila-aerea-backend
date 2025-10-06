@@ -196,21 +196,47 @@ export const rescheduleFlightToNextTanda = async (
     const aircraftId = flight.aircraftId;
     const tandaActual = flight.numero_tanda;
 
-    // Buscar la siguiente tanda disponible
-    const nextTandaFlight = await Flight.findOne({
-      aircraftId,
+    // Buscar la siguiente tanda (sin importar el avión)
+    const anyNextTanda = await Flight.findOne({
       numero_tanda: { $gt: tandaActual },
       estado: 'abierto',
     }).sort({ numero_tanda: 1 });
 
-    if (!nextTandaFlight) {
+    if (!anyNextTanda) {
       res.status(404).json({
-        error: 'No hay tanda siguiente disponible para este avión',
+        error: 'No hay tandas siguientes disponibles',
       });
       return;
     }
 
-    const tandaSiguiente = nextTandaFlight.numero_tanda;
+    const tandaSiguiente = anyNextTanda.numero_tanda;
+
+    // Verificar si este avión ya tiene un vuelo en la siguiente tanda
+    let nextTandaFlight = await Flight.findOne({
+      aircraftId,
+      numero_tanda: tandaSiguiente,
+      estado: 'abierto',
+    });
+
+    // Si no existe, crear el vuelo para este avión en la siguiente tanda
+    if (!nextTandaFlight) {
+      const { Aircraft } = await import('../models');
+      const aircraft = await Aircraft.findById(aircraftId);
+
+      if (!aircraft) {
+        res.status(404).json({ error: 'Avión no encontrado' });
+        return;
+      }
+
+      nextTandaFlight = await Flight.create({
+        aircraftId,
+        numero_tanda: tandaSiguiente,
+        fecha_hora: anyNextTanda.fecha_hora,
+        capacidad_total: aircraft.capacidad,
+        asientos_ocupados: 0,
+        estado: 'abierto',
+      });
+    }
 
     // Obtener todos los pasajeros del vuelo actual
     const { Ticket } = await import('../models');
