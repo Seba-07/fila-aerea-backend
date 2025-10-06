@@ -261,8 +261,10 @@ export const rescheduleFlightToNextTanda = async (
         estado: { $in: ['asignado', 'inscrito'] },
       }).populate('userId');
 
-      // Marcar con reprogramación pendiente a los pasajeros desplazados
+      // Mover automáticamente a los pasajeros desplazados
       for (const ticket of ticketsDesplazados) {
+        // Actualizar flightId al vuelo movido (que ahora está en la nueva tanda)
+        ticket.flightId = nextTandaFlight._id as any;
         ticket.reprogramacion_pendiente = {
           nuevo_flightId: nextTandaFlight._id as any,
           numero_tanda_anterior: oldTandaNum,
@@ -277,13 +279,15 @@ export const rescheduleFlightToNextTanda = async (
           userId: ticket.userId,
           tipo: 'reprogramacion',
           titulo: 'Vuelo Reprogramado en Cascada',
-          mensaje: `Tu vuelo de la tanda ${oldTandaNum} ha sido reprogramado a la tanda ${nuevaTandaNum} debido a ajustes en la programación. Por favor acepta o rechaza la reprogramación.`,
+          mensaje: `Tu vuelo de la tanda ${oldTandaNum} ha sido reprogramado automáticamente a la tanda ${nuevaTandaNum} debido a ajustes en la programación.`,
           metadata: {
             ticketId: ticket._id.toString(),
             tanda_anterior: oldTandaNum,
             tanda_nueva: nuevaTandaNum,
           },
         });
+
+        logger.info(`Ticket ${ticket._id} desplazado de tanda ${oldTandaNum} a ${nuevaTandaNum}`);
       }
 
       logger.info(`Vuelo desplazado de tanda ${oldTandaNum} a ${nuevaTandaNum} con ${ticketsDesplazados.length} pasajeros`);
@@ -341,8 +345,10 @@ export const rescheduleFlightToNextTanda = async (
       return;
     }
 
-    // Marcar tickets con reprogramación pendiente
+    // Mover pasajeros automáticamente al nuevo vuelo
     for (const ticket of ticketsAfectados) {
+      // Actualizar el flightId al nuevo vuelo
+      ticket.flightId = nextTandaFlight._id as any;
       ticket.reprogramacion_pendiente = {
         nuevo_flightId: nextTandaFlight._id as any,
         numero_tanda_anterior: tandaActual,
@@ -357,19 +363,27 @@ export const rescheduleFlightToNextTanda = async (
         userId: ticket.userId,
         tipo: 'reprogramacion',
         titulo: 'Vuelo Reprogramado',
-        mensaje: `Tu vuelo de la tanda ${tandaActual} ha sido reprogramado a la tanda ${tandaSiguiente}. Por favor acepta o rechaza la reprogramación.`,
+        mensaje: `Tu vuelo de la tanda ${tandaActual} ha sido reprogramado automáticamente a la tanda ${tandaSiguiente}.`,
         metadata: {
           ticketId: ticket._id.toString(),
           tanda_anterior: tandaActual,
           tanda_nueva: tandaSiguiente,
         },
       });
+
+      logger.info(`Ticket ${ticket._id} movido de tanda ${tandaActual} a ${tandaSiguiente}`);
     }
 
-    // Marcar vuelo como reprogramado con razón (pero no mover pasajeros aún)
+    // Actualizar contadores de asientos
+    nextTandaFlight.asientos_ocupados += ticketsAfectados.length;
+    await nextTandaFlight.save();
+
+    flight.asientos_ocupados = 0; // Resetear contador del vuelo viejo
     flight.estado = 'reprogramado';
     flight.razon_reprogramacion = razon;
     await flight.save();
+
+    logger.info(`${ticketsAfectados.length} pasajeros movidos de tanda ${tandaActual} a ${tandaSiguiente}`);
 
     // Si la razón es combustible, crear notificación de reabastecimiento para staff
     if (razon === 'combustible') {
