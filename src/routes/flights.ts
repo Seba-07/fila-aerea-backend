@@ -14,5 +14,6 @@ router.get('/:id', authenticate, getFlightById);
 
 // Rutas de staff
 router.patch('/:id/status', authenticate, requireStaff, updateFlightStatus);
+router.patch('/:id', authenticate, requireStaff, updateFlightStatus); // Alias para compatibilidad
 
 export default router;

@@ -41,3 +41,36 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Error al obtener perfil' });
   }
 };
+
+export const updateTicket = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ticketId } = req.params;
+    const { pasajeros, flightId } = req.body;
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
+      return;
+    }
+
+    // Actualizar campos
+    if (pasajeros) {
+      ticket.pasajeros = pasajeros;
+    }
+
+    if (flightId !== undefined) {
+      ticket.flightId = flightId;
+      // Si se asigna un vuelo y hay pasajeros, cambiar estado a asignado
+      if (flightId && ticket.pasajeros && ticket.pasajeros.length > 0) {
+        ticket.estado = 'asignado';
+      }
+    }
+
+    await ticket.save();
+
+    res.json({ message: 'Ticket actualizado exitosamente', ticket });
+  } catch (error: any) {
+    logger.error('Error en updateTicket:', error);
+    res.status(500).json({ error: 'Error al actualizar ticket' });
+  }
+};
