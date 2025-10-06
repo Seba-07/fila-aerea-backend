@@ -228,8 +228,8 @@ export const rescheduleFlightToNextTanda = async (
       estado: 'abierto',
     });
 
-    // Si el avión ya existe en la siguiente tanda, mover ese vuelo a una nueva tanda
-    if (nextTandaFlight && nextTandaFlight.asientos_ocupados === 0) {
+    // Si el avión ya existe en la siguiente tanda, mover ese vuelo a una nueva tanda (efecto dominó)
+    if (nextTandaFlight) {
       const { Aircraft, Ticket } = await import('../models');
       const aircraft = await Aircraft.findById(aircraftId);
 
@@ -347,16 +347,8 @@ export const rescheduleFlightToNextTanda = async (
       estado: { $in: ['asignado', 'inscrito'] },
     }).populate('userId');
 
-    // Verificar que la siguiente tanda tenga espacio
-    const asientosNecesarios = flight.asientos_ocupados;
-    const asientosDisponiblesDestino = nextTandaFlight.capacidad_total - nextTandaFlight.asientos_ocupados;
-
-    if (asientosDisponiblesDestino < asientosNecesarios) {
-      res.status(400).json({
-        error: `La tanda ${tandaSiguiente} no tiene suficiente espacio. Necesitas ${asientosNecesarios} asientos pero solo hay ${asientosDisponiblesDestino} disponibles.`,
-      });
-      return;
-    }
+    // Con el efecto dominó, siempre hay espacio porque movemos el vuelo que obstruía
+    // No es necesario validar espacio disponible
 
     // Mover pasajeros automáticamente al nuevo vuelo
     for (const ticket of ticketsAfectados) {
