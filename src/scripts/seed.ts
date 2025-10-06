@@ -25,7 +25,7 @@ const seed = async () => {
     const staff = await User.create({
       nombre: 'Staff',
       apellido: 'Usuario',
-      email: 'staff@test.com',
+      email: 'staff@cac.cl',
       verificado: true,
       rol: 'staff',
     });
@@ -87,7 +87,7 @@ const seed = async () => {
     logger.info(`   - ${flightsCreated.length} tandas programadas`);
     logger.info(`   - 0 pasajeros (crear desde panel staff)`);
     logger.info('\n🔐 CREDENCIALES:');
-    logger.info('   Staff: staff@test.com');
+    logger.info('   Staff: staff@cac.cl');
     logger.info('\n💡 Usar panel staff para registrar nuevos pasajeros con tickets\n');
 
     process.exit(0);
