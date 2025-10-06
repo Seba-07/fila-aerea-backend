@@ -39,18 +39,28 @@ export const createRefueling = async (
     const aircraftIdString = String(aircraftId);
     logger.info('Marcando notificaciones como leídas para aircraftId:', aircraftIdString);
 
-    const updateResult = await Notification.updateMany(
-      {
-        tipo: 'reabastecimiento_pendiente',
-        'metadata.aircraftId': aircraftIdString,
-        leido: false,
-      },
-      {
-        $set: { leido: true },
-      }
-    );
+    // Buscar notificaciones que coincidan con el aircraftId (formato nuevo o viejo)
+    const notificationsToUpdate = await Notification.find({
+      tipo: 'reabastecimiento_pendiente',
+      leido: false,
+    });
 
-    logger.info('Notificaciones actualizadas:', updateResult);
+    let updatedCount = 0;
+    for (const notif of notificationsToUpdate) {
+      const metadataAircraftId = notif.metadata?.aircraftId;
+
+      // Verificar si coincide (string directo o string que contiene el ObjectId)
+      if (
+        metadataAircraftId === aircraftIdString ||
+        (typeof metadataAircraftId === 'string' && metadataAircraftId.includes(aircraftIdString))
+      ) {
+        notif.leido = true;
+        await notif.save();
+        updatedCount++;
+      }
+    }
+
+    logger.info(`Notificaciones actualizadas: ${updatedCount}`);
 
     await EventLog.create({
       type: 'refueling_registered',

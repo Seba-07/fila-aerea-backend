@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Notification, User } from '../models';
+import { Notification } from '../models';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -9,43 +9,18 @@ const checkNotifications = async () => {
     await mongoose.connect(process.env.MONGO_URI as string);
     console.log('Conectado a MongoDB');
 
-    // Obtener todas las notificaciones
-    const notifications = await Notification.find().populate('userId', 'nombre email rol').sort({ createdAt: -1 });
-    console.log(`\nTotal de notificaciones: ${notifications.length}`);
+    const notifications = await Notification.find({
+      tipo: 'reabastecimiento_pendiente',
+    }).lean();
 
-    // Filtrar por tipo
-    const byType: any = {};
-    notifications.forEach(n => {
-      if (!byType[n.tipo]) byType[n.tipo] = 0;
-      byType[n.tipo]++;
-    });
+    console.log('Total notificaciones:', notifications.length);
 
-    console.log('\n=== NOTIFICACIONES POR TIPO ===');
-    Object.keys(byType).forEach(tipo => {
-      console.log(`${tipo}: ${byType[tipo]}`);
-    });
-
-    // Mostrar notificaciones de reabastecimiento
-    const refuelingNotifs = notifications.filter(n => n.tipo === 'reabastecimiento_pendiente');
-    console.log(`\n=== NOTIFICACIONES DE REABASTECIMIENTO (${refuelingNotifs.length}) ===`);
-    refuelingNotifs.forEach(n => {
-      const user = n.userId as any;
-      console.log({
-        id: n._id,
-        usuario: user ? `${user.nombre} (${user.rol})` : 'Usuario eliminado',
-        titulo: n.titulo,
-        mensaje: n.mensaje,
-        leido: n.leido,
-        metadata: n.metadata,
-        fecha: n.createdAt,
-      });
-    });
-
-    // Verificar usuarios staff
-    const staffUsers = await User.find({ rol: 'staff' });
-    console.log(`\n=== USUARIOS STAFF (${staffUsers.length}) ===`);
-    staffUsers.forEach(u => {
-      console.log(`${u.nombre} (${u.email}) - ID: ${u._id}`);
+    notifications.forEach((notif, idx) => {
+      console.log('---');
+      console.log('Notif', idx + 1);
+      console.log('Leido:', notif.leido);
+      console.log('aircraftId:', notif.metadata?.aircraftId);
+      console.log('typeof:', typeof notif.metadata?.aircraftId);
     });
 
     process.exit(0);
