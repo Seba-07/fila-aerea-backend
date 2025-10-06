@@ -2,7 +2,9 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IPasajero {
   nombre: string;
+  apellido: string;
   rut: string;
+  esMenor: boolean;
 }
 
 export interface ITicket extends Document {
@@ -40,9 +42,17 @@ const ticketSchema = new Schema<ITicket>(
           type: String,
           trim: true,
         },
+        apellido: {
+          type: String,
+          trim: true,
+        },
         rut: {
           type: String,
           trim: true,
+        },
+        esMenor: {
+          type: Boolean,
+          default: false,
         },
       },
     ],
