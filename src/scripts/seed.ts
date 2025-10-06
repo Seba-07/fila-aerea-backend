@@ -24,6 +24,7 @@ const seed = async () => {
     // Crear solo usuario staff
     const staff = await User.create({
       nombre: 'Staff',
+      apellido: 'Usuario',
       email: 'staff@test.com',
       verificado: true,
       rol: 'staff',
