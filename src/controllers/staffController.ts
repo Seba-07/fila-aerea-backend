@@ -10,11 +10,11 @@ export const registerPassenger = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { nombre, email, cantidad_tickets, metodo_pago, monto, pasajeros, flightId } = req.body;
+    const { nombre, apellido, rut, email, cantidad_tickets, metodo_pago, monto, pasajeros, flightId } = req.body;
 
-    if (!nombre || !email || !cantidad_tickets || !metodo_pago || monto === undefined) {
+    if (!nombre || !apellido || !email || !cantidad_tickets || !metodo_pago || monto === undefined) {
       res.status(400).json({
-        error: 'Nombre, email, cantidad de tickets, método de pago y monto son obligatorios',
+        error: 'Nombre, apellido, email, cantidad de tickets, método de pago y monto son obligatorios',
       });
       return;
     }
@@ -64,6 +64,8 @@ export const registerPassenger = async (
     // Crear usuario
     const user = await User.create({
       nombre,
+      apellido,
+      rut: rut || undefined,
       email: email.toLowerCase(),
       verificado: true,
       rol: 'passenger',
@@ -436,7 +438,7 @@ export const getPayments = async (
   }
 };
 
-// Crear nueva tanda
+// Crear nueva tanda o agregar aviones a tanda existente
 export const createTanda = async (
   req: AuthRequest,
   res: Response
@@ -451,19 +453,20 @@ export const createTanda = async (
       return;
     }
 
-    // Verificar que la tanda no exista
-    const { Flight } = await import('../models');
-    const existingTanda = await Flight.findOne({ numero_tanda });
-    if (existingTanda) {
-      res.status(400).json({ error: 'El número de tanda ya existe' });
-      return;
-    }
+    const { Flight, Aircraft } = await import('../models');
 
-    // Crear vuelos para cada avión
-    const { Aircraft } = await import('../models');
+    // Verificar si la tanda existe
+    const existingTanda = await Flight.findOne({ numero_tanda });
+
     const flights = [];
 
     for (const aircraftId of aircraftIds) {
+      // Verificar que el avión no esté ya en la tanda
+      const existingFlight = await Flight.findOne({ numero_tanda, aircraftId });
+      if (existingFlight) {
+        continue; // Saltar aviones que ya están en la tanda
+      }
+
       const aircraft = await Aircraft.findById(aircraftId);
       if (!aircraft) {
         res.status(404).json({ error: `Avión ${aircraftId} no encontrado` });
@@ -480,10 +483,15 @@ export const createTanda = async (
       });
     }
 
+    if (flights.length === 0) {
+      res.status(400).json({ error: 'Todos los aviones ya están en esta tanda' });
+      return;
+    }
+
     const createdFlights = await Flight.insertMany(flights);
 
     await EventLog.create({
-      type: 'tanda_created',
+      type: existingTanda ? 'tanda_aircraft_added' : 'tanda_created',
       entity: 'flight',
       entityId: String(numero_tanda),
       userId: req.user?.userId,
@@ -491,7 +499,7 @@ export const createTanda = async (
     });
 
     res.json({
-      message: 'Tanda creada exitosamente',
+      message: existingTanda ? 'Aviones agregados a la tanda exitosamente' : 'Tanda creada exitosamente',
       flights: createdFlights,
     });
   } catch (error: any) {

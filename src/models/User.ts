@@ -2,6 +2,8 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IUser extends Document {
   nombre: string;
+  apellido: string;
+  rut?: string;
   email: string;
   phone?: string;
   verificado: boolean;
@@ -18,6 +20,17 @@ const userSchema = new Schema<IUser>(
       trim: true,
       minlength: 2,
       maxlength: 100,
+    },
+    apellido: {
+      type: String,
+      required: [true, 'El apellido es obligatorio'],
+      trim: true,
+      minlength: 2,
+      maxlength: 100,
+    },
+    rut: {
+      type: String,
+      trim: true,
     },
     email: {
       type: String,
