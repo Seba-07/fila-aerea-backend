@@ -6,6 +6,7 @@ import {
   acceptRescheduling,
   rejectRescheduling,
   rescheduleToChosenTanda,
+  inscribeTicket,
 } from '../controllers/userController';
 import { authenticate } from '../middlewares/auth';
 
@@ -14,6 +15,9 @@ const router = Router();
 router.get('/me', authenticate, getMe);
 router.patch('/tickets/:ticketId', authenticate, updateTicket);
 router.delete('/tickets/:ticketId/flight', authenticate, removePassengerFromFlight);
+
+// Inscripción de tickets
+router.post('/tickets/:ticketId/inscribir', authenticate, inscribeTicket);
 
 // Reprogramaciones
 router.post('/tickets/:ticketId/accept-reschedule', authenticate, acceptRescheduling);

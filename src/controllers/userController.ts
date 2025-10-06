@@ -302,3 +302,95 @@ export const rescheduleToChosenTanda = async (req: AuthRequest, res: Response): 
     res.status(500).json({ error: 'Error al reprogramar ticket' });
   }
 };
+
+// Inscribir ticket en un vuelo
+export const inscribeTicket = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ticketId } = req.params;
+    const { flightId } = req.body;
+    const userId = req.user?.userId;
+
+    if (!flightId) {
+      res.status(400).json({ error: 'ID de vuelo es obligatorio' });
+      return;
+    }
+
+    // Verificar que el ticket existe y pertenece al usuario
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
+      return;
+    }
+
+    if (ticket.userId.toString() !== userId) {
+      res.status(403).json({ error: 'No tienes permiso para inscribir este ticket' });
+      return;
+    }
+
+    // Verificar que el ticket está disponible
+    if (ticket.estado !== 'disponible') {
+      res.status(400).json({ error: `El ticket no está disponible (estado: ${ticket.estado})` });
+      return;
+    }
+
+    // Verificar que el ticket tiene pasajero asignado
+    if (!ticket.pasajeros || ticket.pasajeros.length === 0 || !ticket.pasajeros[0].nombre) {
+      res.status(400).json({ error: 'El ticket debe tener un pasajero asignado' });
+      return;
+    }
+
+    // Verificar que el vuelo existe y está abierto
+    const { Flight } = await import('../models');
+    const flight = await Flight.findById(flightId);
+
+    if (!flight) {
+      res.status(404).json({ error: 'Vuelo no encontrado' });
+      return;
+    }
+
+    if (flight.estado !== 'abierto') {
+      res.status(400).json({ error: `El vuelo no está disponible (estado: ${flight.estado})` });
+      return;
+    }
+
+    // Verificar que hay asientos disponibles
+    const asientosDisponibles = flight.capacidad_total - flight.asientos_ocupados;
+    if (asientosDisponibles <= 0) {
+      res.status(400).json({ error: 'No hay asientos disponibles en este vuelo' });
+      return;
+    }
+
+    // Inscribir el ticket
+    ticket.flightId = flightId as any;
+    ticket.estado = 'inscrito';
+    await ticket.save();
+
+    // Incrementar asientos ocupados
+    flight.asientos_ocupados += 1;
+    await flight.save();
+
+    // Registrar en event log
+    const { EventLog } = await import('../models');
+    await EventLog.create({
+      type: 'ticket_inscribed',
+      entity: 'ticket',
+      entityId: ticket._id.toString(),
+      userId,
+      payload: {
+        flightId: flight._id.toString(),
+        numero_tanda: flight.numero_tanda,
+        pasajero: ticket.pasajeros[0],
+      },
+    });
+
+    logger.info(`Ticket ${ticket.codigo_ticket} inscrito en vuelo ${flight._id}`);
+
+    res.json({
+      message: 'Ticket inscrito exitosamente',
+      ticket,
+    });
+  } catch (error: any) {
+    logger.error('Error en inscribeTicket:', error);
+    res.status(500).json({ error: 'Error al inscribir ticket' });
+  }
+};
