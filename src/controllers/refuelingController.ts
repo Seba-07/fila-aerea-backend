@@ -33,6 +33,19 @@ export const createRefueling = async (
       registradoPor: req.user?.userId,
     });
 
+    // Marcar como leídas todas las notificaciones de reabastecimiento pendiente para este avión
+    const { Notification } = await import('../models');
+    await Notification.updateMany(
+      {
+        tipo: 'reabastecimiento_pendiente',
+        'metadata.aircraftId': aircraftId.toString(),
+        leido: false,
+      },
+      {
+        $set: { leido: true },
+      }
+    );
+
     await EventLog.create({
       type: 'refueling_registered',
       entity: 'refueling',
