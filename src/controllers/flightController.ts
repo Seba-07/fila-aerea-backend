@@ -293,3 +293,47 @@ export const rescheduleFlightToNextTanda = async (
     res.status(500).json({ error: 'Error al reprogramar vuelo' });
   }
 };
+
+export const deleteFlight = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const flight = await Flight.findById(id);
+    if (!flight) {
+      res.status(404).json({ error: 'Vuelo no encontrado' });
+      return;
+    }
+
+    // Verificar que el vuelo no tenga pasajeros
+    if (flight.asientos_ocupados > 0) {
+      res.status(400).json({
+        error: 'No se puede eliminar un vuelo con pasajeros inscritos',
+      });
+      return;
+    }
+
+    await Flight.findByIdAndDelete(id);
+
+    await EventLog.create({
+      type: 'flight_deleted',
+      entity: 'flight',
+      entityId: id,
+      userId: req.user?.userId,
+      payload: {
+        numero_tanda: flight.numero_tanda,
+        aircraftId: flight.aircraftId,
+      },
+    });
+
+    const io = getIO();
+    io.emit('flightDeleted', { flightId: id });
+
+    res.json({ message: 'Vuelo eliminado exitosamente' });
+  } catch (error: any) {
+    logger.error('Error en deleteFlight:', error);
+    res.status(500).json({ error: 'Error al eliminar vuelo' });
+  }
+};
