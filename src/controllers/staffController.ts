@@ -394,20 +394,46 @@ export const getPayments = async (
       .populate('userId', 'nombre apellido email')
       .sort({ createdAt: -1 });
 
-    const paymentsFormatted = payments.map(p => ({
-      id: p._id,
-      usuario: {
-        id: (p.userId as any)._id,
-        nombre: `${(p.userId as any).nombre} ${(p.userId as any).apellido}`,
-        email: (p.userId as any).email,
-      },
-      monto: p.monto,
-      metodo_pago: p.metodo_pago,
-      cantidad_tickets: p.cantidad_tickets,
-      tipo: p.tipo,
-      descripcion: p.descripcion,
-      fecha: p.fecha,
-    }));
+    const paymentsFormatted = payments.map(p => {
+      const user = p.userId as any;
+
+      // Manejar caso de usuario eliminado
+      if (!user) {
+        return {
+          id: p._id,
+          usuario: {
+            id: null,
+            nombre: 'Usuario Eliminado',
+            email: 'N/A',
+          },
+          monto: p.monto,
+          metodo_pago: p.metodo_pago,
+          cantidad_tickets: p.cantidad_tickets,
+          tipo: p.tipo,
+          descripcion: p.descripcion,
+          fecha: p.fecha,
+        };
+      }
+
+      const nombreCompleto = user.apellido
+        ? `${user.nombre} ${user.apellido}`
+        : user.nombre;
+
+      return {
+        id: p._id,
+        usuario: {
+          id: user._id,
+          nombre: nombreCompleto,
+          email: user.email,
+        },
+        monto: p.monto,
+        metodo_pago: p.metodo_pago,
+        cantidad_tickets: p.cantidad_tickets,
+        tipo: p.tipo,
+        descripcion: p.descripcion,
+        fecha: p.fecha,
+      };
+    });
 
     // Total recaudado (todos los pagos positivos y negativos)
     const totalRecaudado = payments.reduce((sum, p) => sum + p.monto, 0);
