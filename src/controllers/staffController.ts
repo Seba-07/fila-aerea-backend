@@ -10,7 +10,7 @@ export const registerPassenger = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { nombre, email, cantidad_tickets, metodo_pago, monto, nombres_pasajeros, flightId } = req.body;
+    const { nombre, email, cantidad_tickets, metodo_pago, monto, pasajeros, flightId } = req.body;
 
     if (!nombre || !email || !cantidad_tickets || !metodo_pago || monto === undefined) {
       res.status(400).json({
@@ -40,6 +40,20 @@ export const registerPassenger = async (
       return;
     }
 
+    // Validar que si hay menores, haya al menos un adulto
+    if (pasajeros && Array.isArray(pasajeros)) {
+      const pasajerosConDatos = pasajeros.filter(p => p.nombre || p.apellido || p.rut);
+      const menores = pasajerosConDatos.filter(p => p.esMenor === true);
+      const adultos = pasajerosConDatos.filter(p => !p.esMenor);
+
+      if (menores.length > 0 && adultos.length === 0) {
+        res.status(400).json({
+          error: 'Si hay menores de edad en la reserva, debe haber al menos un adulto',
+        });
+        return;
+      }
+    }
+
     // Verificar si el email ya existe
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
@@ -55,18 +69,27 @@ export const registerPassenger = async (
       rol: 'passenger',
     });
 
-    // Crear tickets con nombres de pasajeros si se proporcionan
+    // Crear tickets con datos de pasajeros si se proporcionan
     const tickets = [];
     for (let i = 1; i <= cantidad_tickets; i++) {
       const codigo_ticket = `TIX${Date.now()}${i}`.toUpperCase().slice(0, 12);
-      const pasajeroNombre = nombres_pasajeros && nombres_pasajeros[i - 1];
+      const pasajeroData = pasajeros && pasajeros[i - 1];
+
+      const pasajeroInfo = pasajeroData && (pasajeroData.nombre || pasajeroData.apellido || pasajeroData.rut)
+        ? [{
+            nombre: pasajeroData.nombre || '',
+            apellido: pasajeroData.apellido || '',
+            rut: pasajeroData.rut || '',
+            esMenor: pasajeroData.esMenor || false,
+          }]
+        : [];
 
       tickets.push({
         userId: user._id,
         codigo_ticket,
-        pasajeros: pasajeroNombre ? [{ nombre: pasajeroNombre }] : [],
-        estado: pasajeroNombre && flightId ? 'asignado' : 'disponible',
-        flightId: pasajeroNombre && flightId ? flightId : undefined,
+        pasajeros: pasajeroInfo,
+        estado: pasajeroInfo.length > 0 && flightId ? 'asignado' : 'disponible',
+        flightId: pasajeroInfo.length > 0 && flightId ? flightId : undefined,
       });
     }
 
