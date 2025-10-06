@@ -171,12 +171,13 @@ export const acceptRescheduling = async (req: AuthRequest, res: Response): Promi
   }
 };
 
-// Rechazar reprogramación de ticket
+// Rechazar reprogramación de ticket con devolución
 export const rejectRescheduling = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { ticketId } = req.params;
+    const { monto_devolucion, metodo_pago } = req.body;
 
-    const ticket = await Ticket.findById(ticketId);
+    const ticket = await Ticket.findById(ticketId).populate('userId');
     if (!ticket) {
       res.status(404).json({ error: 'Ticket no encontrado' });
       return;
@@ -187,21 +188,53 @@ export const rejectRescheduling = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // Simplemente remover la reprogramación pendiente
+    if (!monto_devolucion || monto_devolucion <= 0) {
+      res.status(400).json({ error: 'Monto de devolución es obligatorio' });
+      return;
+    }
+
+    const oldFlightId = ticket.flightId;
+
+    // Decrementar asientos del vuelo original
+    if (oldFlightId) {
+      const { Flight } = await import('../models');
+      await Flight.findByIdAndUpdate(oldFlightId, {
+        $inc: { asientos_ocupados: -1 }
+      });
+    }
+
+    // Registrar devolución en pagos
+    const { Payment } = await import('../models');
+    await Payment.create({
+      userId: ticket.userId,
+      monto: -monto_devolucion,
+      metodo_pago: metodo_pago || 'efectivo',
+      cantidad_tickets: 1,
+      tipo: 'devolucion',
+      descripcion: `Devolución por rechazo de reprogramación - Tanda ${ticket.reprogramacion_pendiente.numero_tanda_anterior}`,
+    });
+
+    // Cancelar ticket
+    ticket.flightId = undefined;
+    ticket.estado = 'cancelado';
     ticket.reprogramacion_pendiente = undefined;
     await ticket.save();
 
-    res.json({ message: 'Reprogramación rechazada. Mantiene vuelo original', ticket });
+    res.json({
+      message: 'Reprogramación rechazada. Devolución registrada y ticket cancelado',
+      monto_devuelto: monto_devolucion,
+      ticket,
+    });
   } catch (error: any) {
     logger.error('Error en rejectRescheduling:', error);
     res.status(500).json({ error: 'Error al rechazar reprogramación' });
   }
 };
 
-// Reprogramar todos los tickets del usuario a una tanda específica
-export const rescheduleAllUserTickets = async (req: AuthRequest, res: Response): Promise<void> => {
+// Reprogramar ticket a tanda elegida por el usuario
+export const rescheduleToChosenTanda = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.userId;
+    const { ticketId } = req.params;
     const { numero_tanda } = req.body;
 
     if (!numero_tanda) {
@@ -209,15 +242,9 @@ export const rescheduleAllUserTickets = async (req: AuthRequest, res: Response):
       return;
     }
 
-    // Obtener todos los tickets del usuario que estén inscritos
-    const tickets = await Ticket.find({
-      userId,
-      estado: { $in: ['asignado', 'inscrito'] },
-      flightId: { $exists: true },
-    });
-
-    if (tickets.length === 0) {
-      res.status(404).json({ error: 'No tienes tickets inscritos para reprogramar' });
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
       return;
     }
 
@@ -233,57 +260,45 @@ export const rescheduleAllUserTickets = async (req: AuthRequest, res: Response):
       return;
     }
 
-    const ticketsReprogramados = [];
-    const errores = [];
+    // Buscar vuelo con espacio
+    const vueloConEspacio = targetFlights.find(
+      f => (f.capacidad_total - f.asientos_ocupados) > 0
+    );
 
-    for (const ticket of tickets) {
-      // Buscar vuelo con espacio en la tanda objetivo
-      const vueloConEspacio = targetFlights.find(
-        f => (f.capacidad_total - f.asientos_ocupados) > 0
-      );
-
-      if (!vueloConEspacio) {
-        errores.push({
-          ticketId: ticket._id,
-          error: 'No hay vuelos con espacio disponible en la tanda objetivo',
-        });
-        continue;
-      }
-
-      const oldFlightId = ticket.flightId;
-
-      // Decrementar vuelo anterior
-      if (oldFlightId) {
-        await Flight.findByIdAndUpdate(oldFlightId, {
-          $inc: { asientos_ocupados: -1 }
-        });
-      }
-
-      // Incrementar vuelo nuevo
-      await Flight.findByIdAndUpdate(vueloConEspacio._id, {
-        $inc: { asientos_ocupados: 1 }
+    if (!vueloConEspacio) {
+      res.status(400).json({
+        error: 'No hay vuelos con espacio disponible en la tanda seleccionada',
       });
+      return;
+    }
 
-      // Actualizar ticket
-      ticket.flightId = vueloConEspacio._id;
-      ticket.reprogramacion_pendiente = undefined;
-      await ticket.save();
+    const oldFlightId = ticket.flightId;
 
-      ticketsReprogramados.push({
-        ticketId: ticket._id,
-        pasajero: ticket.pasajeros[0]?.nombre,
-        nuevo_vuelo: vueloConEspacio._id,
+    // Decrementar vuelo anterior
+    if (oldFlightId) {
+      await Flight.findByIdAndUpdate(oldFlightId, {
+        $inc: { asientos_ocupados: -1 }
       });
     }
 
+    // Incrementar vuelo nuevo
+    await Flight.findByIdAndUpdate(vueloConEspacio._id, {
+      $inc: { asientos_ocupados: 1 }
+    });
+
+    // Actualizar ticket
+    ticket.flightId = vueloConEspacio._id as any;
+    ticket.reprogramacion_pendiente = undefined;
+    await ticket.save();
+
     res.json({
-      message: 'Reprogramación completada',
-      tickets_reprogramados: ticketsReprogramados.length,
-      tickets: ticketsReprogramados,
-      errores,
+      message: 'Ticket reprogramado exitosamente',
+      tanda_nueva: numero_tanda,
+      vuelo: vueloConEspacio._id,
+      ticket,
     });
   } catch (error: any) {
-    logger.error('Error en rescheduleAllUserTickets:', error);
-    res.status(500).json({ error: 'Error al reprogramar tickets' });
+    logger.error('Error en rescheduleToChosenTanda:', error);
+    res.status(500).json({ error: 'Error al reprogramar ticket' });
   }
 };

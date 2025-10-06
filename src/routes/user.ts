@@ -5,7 +5,7 @@ import {
   removePassengerFromFlight,
   acceptRescheduling,
   rejectRescheduling,
-  rescheduleAllUserTickets,
+  rescheduleToChosenTanda,
 } from '../controllers/userController';
 import { authenticate } from '../middlewares/auth';
 
@@ -18,6 +18,6 @@ router.delete('/tickets/:ticketId/flight', authenticate, removePassengerFromFlig
 // Reprogramaciones
 router.post('/tickets/:ticketId/accept-reschedule', authenticate, acceptRescheduling);
 router.post('/tickets/:ticketId/reject-reschedule', authenticate, rejectRescheduling);
-router.post('/reschedule-all', authenticate, rescheduleAllUserTickets);
+router.post('/tickets/:ticketId/reschedule', authenticate, rescheduleToChosenTanda);
 
 export default router;

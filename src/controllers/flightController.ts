@@ -233,7 +233,7 @@ export const rescheduleFlightToNextTanda = async (
     // Marcar tickets con reprogramación pendiente
     for (const ticket of ticketsAfectados) {
       ticket.reprogramacion_pendiente = {
-        nuevo_flightId: nextTandaFlight._id,
+        nuevo_flightId: nextTandaFlight._id as any,
         numero_tanda_anterior: tandaActual,
         numero_tanda_nueva: tandaSiguiente,
         fecha_reprogramacion: new Date(),
