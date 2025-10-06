@@ -342,6 +342,9 @@ export const rescheduleFlightToNextTanda = async (
 
       const aircraft = await import('../models').then(m => m.Aircraft.findById(aircraftId));
 
+      // Convertir ObjectId a string correctamente
+      const aircraftIdString = String(aircraftId);
+
       for (const staffUser of staffUsers) {
         await Notification.create({
           userId: staffUser._id,
@@ -349,8 +352,8 @@ export const rescheduleFlightToNextTanda = async (
           titulo: 'Reabastecimiento Pendiente',
           mensaje: `El avión ${aircraft?.matricula} fue reprogramado por falta de combustible. Debes registrar el reabastecimiento en el sistema.`,
           metadata: {
-            aircraftId: aircraftId.toString(),
-            flightId: flight._id.toString(),
+            aircraftId: aircraftIdString,
+            flightId: String(flight._id),
             matricula: aircraft?.matricula,
             razon: 'combustible',
           },
