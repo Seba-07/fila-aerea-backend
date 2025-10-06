@@ -103,6 +103,8 @@ export const registerPassenger = async (
       monto,
       metodo_pago,
       cantidad_tickets,
+      tipo: 'compra',
+      descripcion: `Compra inicial de ${cantidad_tickets} ticket(s)`,
     });
 
     await EventLog.create({
@@ -389,14 +391,14 @@ export const getPayments = async (
 ): Promise<void> => {
   try {
     const payments = await Payment.find()
-      .populate('userId', 'nombre email')
+      .populate('userId', 'nombre apellido email')
       .sort({ createdAt: -1 });
 
     const paymentsFormatted = payments.map(p => ({
       id: p._id,
       usuario: {
         id: (p.userId as any)._id,
-        nombre: (p.userId as any).nombre,
+        nombre: `${(p.userId as any).nombre} ${(p.userId as any).apellido}`,
         email: (p.userId as any).email,
       },
       monto: p.monto,
