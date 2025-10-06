@@ -7,7 +7,10 @@ import {
   updatePassengerTickets,
   deletePassenger,
   getPayments,
+  createTanda,
+  deleteTanda,
 } from '../controllers/staffController';
+import { getAircrafts, updateAircraftCapacity } from '../controllers/aircraftController';
 import { authenticate, requireStaff } from '../middlewares/auth';
 
 const router = Router();
@@ -20,5 +23,13 @@ router.patch('/passengers/:passengerId', authenticate, requireStaff, updatePasse
 router.patch('/passengers/:passengerId/tickets', authenticate, requireStaff, updatePassengerTickets);
 router.delete('/passengers/:passengerId', authenticate, requireStaff, deletePassenger);
 router.get('/payments', authenticate, requireStaff, getPayments);
+
+// Tandas
+router.post('/tandas', authenticate, requireStaff, createTanda);
+router.delete('/tandas/:numero_tanda', authenticate, requireStaff, deleteTanda);
+
+// Aviones
+router.get('/aircrafts', authenticate, requireStaff, getAircrafts);
+router.patch('/aircrafts/:aircraftId/capacity', authenticate, requireStaff, updateAircraftCapacity);
 
 export default router;

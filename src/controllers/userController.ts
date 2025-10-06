@@ -93,3 +93,35 @@ export const updateTicket = async (req: AuthRequest, res: Response): Promise<voi
     res.status(500).json({ error: 'Error al actualizar ticket' });
   }
 };
+
+export const removePassengerFromFlight = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ticketId } = req.params;
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
+      return;
+    }
+
+    const flightId = ticket.flightId;
+
+    // Decrementar asientos ocupados del vuelo
+    if (flightId) {
+      const { Flight } = await import('../models');
+      await Flight.findByIdAndUpdate(flightId, {
+        $inc: { asientos_ocupados: -1 }
+      });
+    }
+
+    // Remover vuelo del ticket y cambiar estado
+    ticket.flightId = undefined;
+    ticket.estado = 'disponible';
+    await ticket.save();
+
+    res.json({ message: 'Pasajero removido del vuelo exitosamente', ticket });
+  } catch (error: any) {
+    logger.error('Error en removePassengerFromFlight:', error);
+    res.status(500).json({ error: 'Error al remover pasajero del vuelo' });
+  }
+};

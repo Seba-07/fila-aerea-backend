@@ -412,3 +412,110 @@ export const getPayments = async (
     res.status(500).json({ error: 'Error al obtener pagos' });
   }
 };
+
+// Crear nueva tanda
+export const createTanda = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { numero_tanda, fecha_hora, aircraftIds } = req.body;
+
+    if (!numero_tanda || !fecha_hora || !aircraftIds || !Array.isArray(aircraftIds)) {
+      res.status(400).json({
+        error: 'Número de tanda, fecha/hora y lista de aviones son obligatorios',
+      });
+      return;
+    }
+
+    // Verificar que la tanda no exista
+    const { Flight } = await import('../models');
+    const existingTanda = await Flight.findOne({ numero_tanda });
+    if (existingTanda) {
+      res.status(400).json({ error: 'El número de tanda ya existe' });
+      return;
+    }
+
+    // Crear vuelos para cada avión
+    const { Aircraft } = await import('../models');
+    const flights = [];
+
+    for (const aircraftId of aircraftIds) {
+      const aircraft = await Aircraft.findById(aircraftId);
+      if (!aircraft) {
+        res.status(404).json({ error: `Avión ${aircraftId} no encontrado` });
+        return;
+      }
+
+      flights.push({
+        aircraftId,
+        numero_tanda,
+        fecha_hora: new Date(fecha_hora),
+        capacidad_total: aircraft.capacidad,
+        asientos_ocupados: 0,
+        estado: 'programado',
+      });
+    }
+
+    const createdFlights = await Flight.insertMany(flights);
+
+    await EventLog.create({
+      type: 'tanda_created',
+      entity: 'flight',
+      entityId: String(numero_tanda),
+      userId: req.user?.userId,
+      payload: { numero_tanda, fecha_hora, aircraftIds },
+    });
+
+    res.json({
+      message: 'Tanda creada exitosamente',
+      flights: createdFlights,
+    });
+  } catch (error: any) {
+    logger.error('Error en createTanda:', error);
+    res.status(500).json({ error: 'Error al crear tanda' });
+  }
+};
+
+// Eliminar tanda completa
+export const deleteTanda = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { numero_tanda } = req.params;
+
+    const { Flight } = await import('../models');
+    const flights = await Flight.find({ numero_tanda: Number(numero_tanda) });
+
+    if (flights.length === 0) {
+      res.status(404).json({ error: 'Tanda no encontrada' });
+      return;
+    }
+
+    // Verificar que ningún vuelo tenga pasajeros inscritos
+    const flightsWithPassengers = flights.filter(f => f.asientos_ocupados > 0);
+    if (flightsWithPassengers.length > 0) {
+      res.status(400).json({
+        error: `No se puede eliminar la tanda. ${flightsWithPassengers.length} vuelo(s) tienen pasajeros inscritos.`,
+      });
+      return;
+    }
+
+    // Eliminar todos los vuelos de la tanda
+    await Flight.deleteMany({ numero_tanda: Number(numero_tanda) });
+
+    await EventLog.create({
+      type: 'tanda_deleted',
+      entity: 'flight',
+      entityId: numero_tanda,
+      userId: req.user?.userId,
+      payload: { numero_tanda },
+    });
+
+    res.json({ message: 'Tanda eliminada exitosamente' });
+  } catch (error: any) {
+    logger.error('Error en deleteTanda:', error);
+    res.status(500).json({ error: 'Error al eliminar tanda' });
+  }
+};
