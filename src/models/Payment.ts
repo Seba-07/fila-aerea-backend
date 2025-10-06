@@ -5,6 +5,8 @@ export interface IPayment extends Document {
   monto: number;
   metodo_pago: 'transferencia' | 'tarjeta' | 'efectivo';
   cantidad_tickets: number;
+  tipo: 'compra' | 'ajuste_positivo' | 'ajuste_negativo' | 'devolucion';
+  descripcion?: string;
   fecha: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -20,7 +22,6 @@ const paymentSchema = new Schema<IPayment>(
     monto: {
       type: Number,
       required: true,
-      min: 0,
     },
     metodo_pago: {
       type: String,
@@ -30,7 +31,14 @@ const paymentSchema = new Schema<IPayment>(
     cantidad_tickets: {
       type: Number,
       required: true,
-      min: 1,
+    },
+    tipo: {
+      type: String,
+      enum: ['compra', 'ajuste_positivo', 'ajuste_negativo', 'devolucion'],
+      default: 'compra',
+    },
+    descripcion: {
+      type: String,
     },
     fecha: {
       type: Date,

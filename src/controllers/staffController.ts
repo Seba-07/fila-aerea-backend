@@ -10,7 +10,7 @@ export const registerPassenger = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { nombre, email, cantidad_tickets, metodo_pago, monto } = req.body;
+    const { nombre, email, cantidad_tickets, metodo_pago, monto, nombres_pasajeros, flightId } = req.body;
 
     if (!nombre || !email || !cantidad_tickets || !metodo_pago || monto === undefined) {
       res.status(400).json({
@@ -55,15 +55,18 @@ export const registerPassenger = async (
       rol: 'passenger',
     });
 
-    // Crear tickets
+    // Crear tickets con nombres de pasajeros si se proporcionan
     const tickets = [];
     for (let i = 1; i <= cantidad_tickets; i++) {
       const codigo_ticket = `TIX${Date.now()}${i}`.toUpperCase().slice(0, 12);
+      const pasajeroNombre = nombres_pasajeros && nombres_pasajeros[i - 1];
+
       tickets.push({
         userId: user._id,
         codigo_ticket,
-        pasajeros: [],
-        estado: 'disponible',
+        pasajeros: pasajeroNombre ? [{ nombre: pasajeroNombre }] : [],
+        estado: pasajeroNombre && flightId ? 'asignado' : 'disponible',
+        flightId: pasajeroNombre && flightId ? flightId : undefined,
       });
     }
 
@@ -148,16 +151,43 @@ export const getPassengers = async (
   }
 };
 
-// Editar cantidad de tickets de un pasajero
+// Editar información del pasajero
+export const updatePassenger = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { passengerId } = req.params;
+    const { nombre, email } = req.body;
+
+    const user = await User.findById(passengerId);
+    if (!user || user.rol !== 'passenger') {
+      res.status(404).json({ error: 'Pasajero no encontrado' });
+      return;
+    }
+
+    if (nombre) user.nombre = nombre;
+    if (email) user.email = email.toLowerCase();
+
+    await user.save();
+
+    res.json({ message: 'Pasajero actualizado exitosamente', user });
+  } catch (error: any) {
+    logger.error('Error en updatePassenger:', error);
+    res.status(500).json({ error: 'Error al actualizar pasajero' });
+  }
+};
+
+// Editar cantidad de tickets de un pasajero (con ajuste de pago)
 export const updatePassengerTickets = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
   try {
     const { passengerId } = req.params;
-    const { cantidad_tickets } = req.body;
+    const { cantidad_tickets, monto_ajuste, metodo_pago } = req.body;
 
-    if (!cantidad_tickets || cantidad_tickets < 0 || cantidad_tickets > 20) {
+    if (cantidad_tickets === undefined || cantidad_tickets < 0 || cantidad_tickets > 20) {
       res.status(400).json({
         error: 'La cantidad de tickets debe estar entre 0 y 20',
       });
@@ -172,12 +202,12 @@ export const updatePassengerTickets = async (
 
     const currentTickets = await Ticket.find({ userId: passengerId });
     const currentCount = currentTickets.length;
+    const diferencia = cantidad_tickets - currentCount;
 
-    if (cantidad_tickets > currentCount) {
+    if (diferencia > 0) {
       // Agregar tickets
-      const ticketsToAdd = cantidad_tickets - currentCount;
       const newTickets = [];
-      for (let i = 1; i <= ticketsToAdd; i++) {
+      for (let i = 1; i <= diferencia; i++) {
         const codigo_ticket = `TIX${Date.now()}${i}`.toUpperCase().slice(0, 12);
         newTickets.push({
           userId: passengerId,
@@ -187,9 +217,21 @@ export const updatePassengerTickets = async (
         });
       }
       await Ticket.insertMany(newTickets);
-    } else if (cantidad_tickets < currentCount) {
+
+      // Registrar ajuste positivo si hay monto
+      if (monto_ajuste && monto_ajuste > 0) {
+        await Payment.create({
+          userId: passengerId,
+          monto: monto_ajuste,
+          metodo_pago: metodo_pago || 'efectivo',
+          cantidad_tickets: diferencia,
+          tipo: 'ajuste_positivo',
+          descripcion: `Agregados ${diferencia} tickets`,
+        });
+      }
+    } else if (diferencia < 0) {
       // Eliminar tickets disponibles
-      const ticketsToRemove = currentCount - cantidad_tickets;
+      const ticketsToRemove = Math.abs(diferencia);
       const availableTickets = currentTickets.filter(t => t.estado === 'disponible');
 
       if (availableTickets.length < ticketsToRemove) {
@@ -201,6 +243,18 @@ export const updatePassengerTickets = async (
 
       const ticketIdsToRemove = availableTickets.slice(0, ticketsToRemove).map(t => t._id);
       await Ticket.deleteMany({ _id: { $in: ticketIdsToRemove } });
+
+      // Registrar devolución si hay monto
+      if (monto_ajuste && monto_ajuste > 0) {
+        await Payment.create({
+          userId: passengerId,
+          monto: -monto_ajuste,
+          metodo_pago: metodo_pago || 'efectivo',
+          cantidad_tickets: ticketsToRemove,
+          tipo: 'ajuste_negativo',
+          descripcion: `Eliminados ${ticketsToRemove} tickets - Devolución`,
+        });
+      }
     }
 
     res.json({ message: 'Tickets actualizados exitosamente' });
@@ -210,7 +264,55 @@ export const updatePassengerTickets = async (
   }
 };
 
-// Obtener historial de pagos
+// Eliminar pasajero (con devolución completa)
+export const deletePassenger = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { passengerId } = req.params;
+    const { monto_devolucion, metodo_pago } = req.body;
+
+    const user = await User.findById(passengerId);
+    if (!user || user.rol !== 'passenger') {
+      res.status(404).json({ error: 'Pasajero no encontrado' });
+      return;
+    }
+
+    const tickets = await Ticket.find({ userId: passengerId });
+    const ticketsNoDisponibles = tickets.filter(t => t.estado !== 'disponible');
+
+    if (ticketsNoDisponibles.length > 0) {
+      res.status(400).json({
+        error: `No se puede eliminar el pasajero. Tiene ${ticketsNoDisponibles.length} tickets en uso.`,
+      });
+      return;
+    }
+
+    // Registrar devolución completa
+    if (monto_devolucion && monto_devolucion > 0) {
+      await Payment.create({
+        userId: passengerId,
+        monto: -monto_devolucion,
+        metodo_pago: metodo_pago || 'efectivo',
+        cantidad_tickets: tickets.length,
+        tipo: 'devolucion',
+        descripcion: `Devolución completa - Pasajero eliminado`,
+      });
+    }
+
+    // Eliminar tickets y usuario
+    await Ticket.deleteMany({ userId: passengerId });
+    await User.findByIdAndDelete(passengerId);
+
+    res.json({ message: 'Pasajero eliminado exitosamente' });
+  } catch (error: any) {
+    logger.error('Error en deletePassenger:', error);
+    res.status(500).json({ error: 'Error al eliminar pasajero' });
+  }
+};
+
+// Obtener historial de pagos con dinero confirmado
 export const getPayments = async (
   req: AuthRequest,
   res: Response
@@ -230,14 +332,35 @@ export const getPayments = async (
       monto: p.monto,
       metodo_pago: p.metodo_pago,
       cantidad_tickets: p.cantidad_tickets,
+      tipo: p.tipo,
+      descripcion: p.descripcion,
       fecha: p.fecha,
     }));
 
+    // Total recaudado (todos los pagos positivos y negativos)
     const totalRecaudado = payments.reduce((sum, p) => sum + p.monto, 0);
+
+    // Dinero confirmado: solo de tickets que han volado (estado 'volado')
+    const allTickets = await Ticket.find({ estado: 'volado' }).populate('userId');
+    const confirmedUserIds = [...new Set(allTickets.map(t => String(t.userId._id)))];
+
+    let totalConfirmado = 0;
+    for (const userId of confirmedUserIds) {
+      const userPayments = await Payment.find({ userId });
+      const userTotal = userPayments.reduce((sum, p) => sum + p.monto, 0);
+
+      // Solo contar si el usuario tiene al menos 1 ticket volado
+      const ticketsVolados = allTickets.filter(t => String(t.userId._id) === userId);
+      if (ticketsVolados.length > 0) {
+        totalConfirmado += userTotal;
+      }
+    }
 
     res.json({
       payments: paymentsFormatted,
       total_recaudado: totalRecaudado,
+      total_confirmado: totalConfirmado,
+      pendiente_devolucion: totalRecaudado - totalConfirmado,
     });
   } catch (error: any) {
     logger.error('Error en getPayments:', error);
