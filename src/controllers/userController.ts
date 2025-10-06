@@ -13,11 +13,11 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
-    // Obtener ticket asociado (pendiente o inscrito)
-    const ticket = await Ticket.findOne({
+    // Obtener todos los tickets del usuario
+    const tickets = await Ticket.find({
       userId: user._id,
-      estado: { $in: ['pendiente', 'inscrito'] },
-    });
+      estado: { $in: ['disponible', 'asignado', 'inscrito'] },
+    }).sort({ createdAt: 1 });
 
     res.json({
       user: {
@@ -28,16 +28,13 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
         rol: user.rol,
         verificado: user.verificado,
       },
-      ticket: ticket
-        ? {
-            id: ticket._id,
-            codigo_ticket: ticket.codigo_ticket,
-            pasajeros: ticket.pasajeros,
-            cantidad_pasajeros: ticket.cantidad_pasajeros,
-            flightId: ticket.flightId,
-            estado: ticket.estado,
-          }
-        : null,
+      tickets: tickets.map((t) => ({
+        id: t._id,
+        codigo_ticket: t.codigo_ticket,
+        pasajeros: t.pasajeros,
+        flightId: t.flightId,
+        estado: t.estado,
+      })),
     });
   } catch (error: any) {
     logger.error('Error en getMe:', error);

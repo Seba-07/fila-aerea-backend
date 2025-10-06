@@ -9,9 +9,8 @@ export interface ITicket extends Document {
   userId: Types.ObjectId;
   codigo_ticket: string;
   pasajeros: IPasajero[];
-  cantidad_pasajeros: number;
   flightId?: Types.ObjectId;
-  estado: 'pendiente' | 'inscrito' | 'volado' | 'cancelado';
+  estado: 'disponible' | 'asignado' | 'inscrito' | 'volado' | 'cancelado';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,29 +32,22 @@ const ticketSchema = new Schema<ITicket>(
       {
         nombre: {
           type: String,
-          required: true,
           trim: true,
         },
         rut: {
           type: String,
-          required: true,
           trim: true,
         },
       },
     ],
-    cantidad_pasajeros: {
-      type: Number,
-      required: true,
-      min: 1,
-    },
     flightId: {
       type: Schema.Types.ObjectId,
       ref: 'Flight',
     },
     estado: {
       type: String,
-      enum: ['pendiente', 'inscrito', 'volado', 'cancelado'],
-      default: 'pendiente',
+      enum: ['disponible', 'asignado', 'inscrito', 'volado', 'cancelado'],
+      default: 'disponible',
     },
   },
   {
