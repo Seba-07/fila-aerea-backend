@@ -25,12 +25,33 @@ export const getFlights = async (req: AuthRequest, res: Response): Promise<void>
       .sort({ fecha_hora: 1 })
       .lean();
 
-    const flightsWithAvailability = flights.map((flight) => ({
-      ...flight,
-      asientos_disponibles: flight.capacidad_total - flight.asientos_ocupados,
-    }));
+    // Obtener pasajeros inscritos para cada vuelo
+    const flightsWithData = await Promise.all(
+      flights.map(async (flight) => {
+        const tickets = await Ticket.find({
+          flightId: flight._id,
+          estado: { $in: ['asignado', 'inscrito', 'volado'] }
+        }).populate('userId', 'nombre email');
 
-    res.json(flightsWithAvailability);
+        const pasajeros = tickets.map(t => ({
+          ticketId: t._id,
+          pasajeros: t.pasajeros,
+          usuario: {
+            nombre: (t.userId as any)?.nombre,
+            email: (t.userId as any)?.email,
+          },
+          estado: t.estado,
+        }));
+
+        return {
+          ...flight,
+          asientos_disponibles: flight.capacidad_total - flight.asientos_ocupados,
+          pasajeros_inscritos: pasajeros,
+        };
+      })
+    );
+
+    res.json(flightsWithData);
   } catch (error: any) {
     logger.error('Error en getFlights:', error);
     res.status(500).json({ error: 'Error al obtener vuelos' });

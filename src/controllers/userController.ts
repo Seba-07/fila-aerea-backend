@@ -53,16 +53,35 @@ export const updateTicket = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    const oldFlightId = ticket.flightId;
+
     // Actualizar campos
     if (pasajeros) {
       ticket.pasajeros = pasajeros;
     }
 
     if (flightId !== undefined) {
+      // Si se está cambiando de vuelo, decrementar el vuelo anterior
+      if (oldFlightId && oldFlightId.toString() !== flightId) {
+        const { Flight } = await import('../models');
+        await Flight.findByIdAndUpdate(oldFlightId, {
+          $inc: { asientos_ocupados: -1 }
+        });
+      }
+
       ticket.flightId = flightId;
-      // Si se asigna un vuelo y hay pasajeros, cambiar estado a asignado
+
+      // Si se asigna un vuelo y hay pasajeros, cambiar estado a asignado e incrementar asientos
       if (flightId && ticket.pasajeros && ticket.pasajeros.length > 0) {
         ticket.estado = 'asignado';
+
+        // Incrementar asientos ocupados del nuevo vuelo (solo si es un cambio nuevo)
+        if (!oldFlightId || oldFlightId.toString() !== flightId) {
+          const { Flight } = await import('../models');
+          await Flight.findByIdAndUpdate(flightId, {
+            $inc: { asientos_ocupados: 1 }
+          });
+        }
       }
     }
 
