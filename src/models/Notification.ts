@@ -2,11 +2,15 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface INotification extends Document {
   userId: Types.ObjectId;
-  tipo: 'recordatorio' | 'boarding' | 'cambio';
+  tipo: 'recordatorio' | 'boarding' | 'cambio' | 'reprogramacion' | 'cancelacion' | 'reabastecimiento_pendiente';
   status: 'pendiente' | 'enviado' | 'error';
-  scheduledAt: Date;
+  titulo?: string;
+  mensaje?: string;
+  leido?: boolean;
+  scheduledAt?: Date;
   sentAt?: Date;
-  payload: Record<string, any>;
+  payload?: Record<string, any>;
+  metadata?: Record<string, any>;
   error?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -21,7 +25,7 @@ const notificationSchema = new Schema<INotification>(
     },
     tipo: {
       type: String,
-      enum: ['recordatorio', 'boarding', 'cambio'],
+      enum: ['recordatorio', 'boarding', 'cambio', 'reprogramacion', 'cancelacion', 'reabastecimiento_pendiente'],
       required: true,
     },
     status: {
@@ -29,16 +33,27 @@ const notificationSchema = new Schema<INotification>(
       enum: ['pendiente', 'enviado', 'error'],
       default: 'pendiente',
     },
+    titulo: {
+      type: String,
+    },
+    mensaje: {
+      type: String,
+    },
+    leido: {
+      type: Boolean,
+      default: false,
+    },
     scheduledAt: {
       type: Date,
-      required: true,
     },
     sentAt: {
       type: Date,
     },
     payload: {
       type: Schema.Types.Mixed,
-      required: true,
+    },
+    metadata: {
+      type: Schema.Types.Mixed,
     },
     error: {
       type: String,
