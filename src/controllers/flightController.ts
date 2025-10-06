@@ -287,6 +287,19 @@ export const rescheduleFlightToNextTanda = async (
           },
         });
 
+        // Enviar push notification al dispositivo móvil
+        const { sendPushNotification } = await import('../services/pushNotification');
+        await sendPushNotification(
+          ticket.userId.toString(),
+          '✈️ Vuelo Reprogramado',
+          `Tu vuelo de la tanda ${oldTandaNum} ha sido reprogramado a la tanda ${nuevaTandaNum}.`,
+          {
+            ticketId: ticket._id.toString(),
+            tanda_anterior: oldTandaNum,
+            tanda_nueva: nuevaTandaNum,
+          }
+        );
+
         logger.info(`Ticket ${ticket._id} desplazado de tanda ${oldTandaNum} a ${nuevaTandaNum}`);
       }
 
@@ -370,6 +383,19 @@ export const rescheduleFlightToNextTanda = async (
           tanda_nueva: tandaSiguiente,
         },
       });
+
+      // Enviar push notification al dispositivo móvil
+      const { sendPushNotification } = await import('../services/pushNotification');
+      await sendPushNotification(
+        ticket.userId.toString(),
+        '✈️ Vuelo Reprogramado',
+        `Tu vuelo de la tanda ${tandaActual} ha sido reprogramado a la tanda ${tandaSiguiente}.`,
+        {
+          ticketId: ticket._id.toString(),
+          tanda_anterior: tandaActual,
+          tanda_nueva: tandaSiguiente,
+        }
+      );
 
       logger.info(`Ticket ${ticket._id} movido de tanda ${tandaActual} a ${tandaSiguiente}`);
     }
