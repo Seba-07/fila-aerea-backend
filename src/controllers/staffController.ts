@@ -482,7 +482,7 @@ export const createTanda = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { numero_tanda, fecha_hora, aircraftIds } = req.body;
+    const { numero_tanda, fecha_hora, hora_prevista, aircraftIds } = req.body;
 
     if (!numero_tanda || !fecha_hora || !aircraftIds || !Array.isArray(aircraftIds)) {
       res.status(400).json({
@@ -491,10 +491,28 @@ export const createTanda = async (
       return;
     }
 
-    const { Flight, Aircraft } = await import('../models');
+    const { Flight, Aircraft, Settings } = await import('../models');
 
     // Verificar si la tanda existe
     const existingTanda = await Flight.findOne({ numero_tanda });
+
+    // Calcular hora prevista de salida
+    let hora_prevista_salida;
+    if (hora_prevista) {
+      // Si se proporciona hora prevista, usarla
+      const fechaBase = new Date(fecha_hora);
+      const [horas, minutos] = hora_prevista.split(':');
+
+      hora_prevista_salida = new Date(Date.UTC(
+        fechaBase.getFullYear(),
+        fechaBase.getMonth(),
+        fechaBase.getDate(),
+        parseInt(horas),
+        parseInt(minutos),
+        0,
+        0
+      ));
+    }
 
     const flights = [];
 
@@ -520,6 +538,7 @@ export const createTanda = async (
         aircraftId,
         numero_tanda,
         fecha_hora: new Date(fecha_hora),
+        hora_prevista_salida,
         capacidad_total: aircraft.capacidad,
         asientos_ocupados: 0,
         estado: 'abierto',
@@ -533,12 +552,44 @@ export const createTanda = async (
 
     const createdFlights = await Flight.insertMany(flights);
 
+    // Si es una nueva tanda y tiene hora prevista, recalcular tandas siguientes
+    if (!existingTanda && hora_prevista_salida) {
+      const settings = await Settings.findOne();
+      if (settings && settings.duracion_tanda_minutos) {
+        const duracionTanda = settings.duracion_tanda_minutos;
+
+        // Obtener tandas siguientes
+        const tandasSiguientes = await Flight.find({
+          numero_tanda: { $gt: numero_tanda },
+          estado: { $in: ['abierto', 'en_vuelo'] },
+        }).sort({ numero_tanda: 1 });
+
+        if (tandasSiguientes.length > 0) {
+          let tandaAnterior = numero_tanda;
+          let horaBase = new Date(hora_prevista_salida);
+
+          for (const vuelo of tandasSiguientes) {
+            if (vuelo.numero_tanda !== tandaAnterior) {
+              const diferenciaTandas = vuelo.numero_tanda - tandaAnterior;
+              horaBase = new Date(hora_prevista_salida.getTime() + (duracionTanda * diferenciaTandas * 60 * 1000));
+              tandaAnterior = vuelo.numero_tanda;
+            }
+
+            vuelo.hora_prevista_salida = new Date(horaBase);
+            await vuelo.save();
+          }
+
+          logger.info(`Recalculadas ${tandasSiguientes.length} horas de tandas siguientes a tanda ${numero_tanda}`);
+        }
+      }
+    }
+
     await EventLog.create({
       type: existingTanda ? 'tanda_aircraft_added' : 'tanda_created',
       entity: 'flight',
       entityId: String(numero_tanda),
       userId: req.user?.userId,
-      payload: { numero_tanda, fecha_hora, aircraftIds },
+      payload: { numero_tanda, fecha_hora, hora_prevista, aircraftIds },
     });
 
     res.json({
