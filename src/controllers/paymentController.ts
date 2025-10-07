@@ -40,9 +40,12 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
     // Calcular monto total
     const monto_total = PRECIO_POR_TICKET * cantidad_tickets;
 
-    // Generar orden de compra única
-    const buy_order = `ORDER-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const session_id = `SESSION-${Date.now()}`;
+    // Generar orden de compra única (máximo 26 caracteres para Transbank)
+    // Formato: ORD + timestamp últimos 10 dígitos + random 6 caracteres = ~20 chars
+    const timestamp = Date.now().toString().slice(-10);
+    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+    const buy_order = `ORD${timestamp}${random}`;
+    const session_id = `SES${timestamp}`;
 
     // Crear transacción en Transbank
     const response = await webpayPlus.create(
