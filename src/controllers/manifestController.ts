@@ -11,7 +11,7 @@ export const getManifests = async (req: AuthRequest, res: Response): Promise<voi
       .populate('createdBy', 'nombre apellido email')
       .sort({ numero_tanda: -1 });
 
-    // Enriquecer con información de los vuelos de cada tanda
+    // Enriquecer con informaciï¿½n de los vuelos de cada tanda
     const manifestsConVuelos = await Promise.all(
       manifests.map(async (manifest) => {
         // Obtener todos los vuelos de la tanda
@@ -37,7 +37,7 @@ export const getManifests = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
-// Obtener un manifiesto específico por tanda
+// Obtener un manifiesto especï¿½fico por tanda
 export const getManifestByTanda = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { numeroTanda } = req.params;
@@ -51,7 +51,7 @@ export const getManifestByTanda = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // Obtener información detallada de los vuelos
+    // Obtener informaciï¿½n detallada de los vuelos
     const vuelosTanda = await Flight.find({ numero_tanda: parseInt(numeroTanda) })
       .populate('aircraftId')
       .sort({ 'aircraftId.matricula': 1 });
@@ -69,7 +69,7 @@ export const getManifestByTanda = async (req: AuthRequest, res: Response): Promi
         const pasajeros = tickets
           .filter(t => t.pasajeros && t.pasajeros.length > 0)
           .map(t => ({
-            nombre: t.pasajeros[0].nombre,
+            nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
             rut: t.pasajeros[0].rut || 'Sin RUT',
           }));
 

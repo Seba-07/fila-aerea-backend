@@ -382,7 +382,7 @@ const generarManifiestoTanda = async (numeroTanda: number, userId: string) => {
       const pasajeros = tickets
         .filter(t => t.pasajeros && t.pasajeros.length > 0)
         .map(t => ({
-          nombre: t.pasajeros[0].nombre,
+          nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
           rut: t.pasajeros[0].rut || 'Sin RUT',
           ticketId: t._id,
         }));
@@ -483,11 +483,20 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       .sort({ numero_tanda: 1 })
       .populate('aircraftId');
 
-    // Calcular hora de inicio de la siguiente tanda (arribo + duración de tanda)
-    let horaSiguiente = new Date(horaArribo.getTime() + duracionTanda * 60 * 1000);
+    // La siguiente tanda sale inmediatamente después del aterrizaje
+    // (sin agregar duración adicional)
+    let horaSiguiente = new Date(horaArribo);
+    let tandaAnterior = tandaActual;
 
     for (const vuelo of vuelosSiguientes) {
       const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
+
+      // Si cambiamos de tanda, agregar la duración
+      if (vuelo.numero_tanda !== tandaAnterior) {
+        const saltoTandas = vuelo.numero_tanda - tandaAnterior;
+        horaSiguiente = new Date(horaSiguiente.getTime() + (duracionTanda * saltoTandas * 60 * 1000));
+        tandaAnterior = vuelo.numero_tanda;
+      }
 
       vuelo.hora_prevista_salida = new Date(horaSiguiente);
       await vuelo.save();
@@ -496,9 +505,6 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       if (horaAnterior && horaAnterior.getTime() !== horaSiguiente.getTime()) {
         await notificarCambioHora(vuelo, horaAnterior, horaSiguiente);
       }
-
-      // Incrementar para la siguiente
-      horaSiguiente = new Date(horaSiguiente.getTime() + duracionTanda * 60 * 1000);
     }
 
     logger.info(`Recalculadas ${vuelosSiguientes.length} horas después de tanda ${tandaActual}`);
