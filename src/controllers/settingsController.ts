@@ -171,6 +171,98 @@ export const updateHoraPrevista = async (req: AuthRequest, res: Response): Promi
   }
 };
 
+// Actualizar hora prevista de toda una tanda con efecto cascada
+export const updateHoraPrevistaTanda = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { numeroTanda } = req.params;
+    const { nueva_hora } = req.body; // Formato "HH:MM"
+
+    const tandaNum = parseInt(numeroTanda);
+
+    // Obtener todos los vuelos de esta tanda
+    const vuelosTanda = await Flight.find({ numero_tanda: tandaNum });
+
+    if (vuelosTanda.length === 0) {
+      res.status(404).json({ error: 'Tanda no encontrada' });
+      return;
+    }
+
+    // Crear fecha completa con la nueva hora
+    const primeraFecha = new Date(vuelosTanda[0].fecha_hora);
+    const [horas, minutos] = nueva_hora.split(':');
+    primeraFecha.setHours(parseInt(horas), parseInt(minutos), 0, 0);
+
+    // Actualizar todos los vuelos de la tanda
+    for (const vuelo of vuelosTanda) {
+      const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
+      vuelo.hora_prevista_salida = new Date(primeraFecha);
+      await vuelo.save();
+
+      // Notificar si cambió
+      if (horaAnterior && horaAnterior.getTime() !== primeraFecha.getTime()) {
+        await notificarCambioHora(vuelo, horaAnterior, primeraFecha);
+      }
+    }
+
+    // Recalcular las tandas siguientes
+    await recalcularTandasSiguientes(tandaNum, primeraFecha);
+
+    logger.info(`Actualizada hora prevista de tanda ${tandaNum} a ${nueva_hora} y recalculadas tandas siguientes`);
+
+    res.json({
+      message: 'Hora prevista actualizada con efecto cascada',
+      vuelos_actualizados: vuelosTanda.length
+    });
+  } catch (error: any) {
+    logger.error('Error en updateHoraPrevistaTanda:', error);
+    res.status(500).json({ error: 'Error al actualizar hora prevista de tanda' });
+  }
+};
+
+// Recalcular tandas siguientes después de cambio de hora en una tanda
+const recalcularTandasSiguientes = async (tandaActual: number, nuevaHora: Date) => {
+  try {
+    const settings = await Settings.findOne();
+    if (!settings) return;
+
+    const duracionTanda = settings.duracion_tanda_minutos;
+
+    // Obtener todas las tandas siguientes (agrupadas)
+    const vuelosSiguientes = await Flight.find({
+      numero_tanda: { $gt: tandaActual },
+      estado: { $in: ['abierto', 'en_vuelo'] },
+    }).sort({ numero_tanda: 1 });
+
+    if (vuelosSiguientes.length === 0) return;
+
+    // Calcular hora base para la siguiente tanda
+    let horaSiguiente = new Date(nuevaHora.getTime() + duracionTanda * 60 * 1000);
+    let tandaAnterior = tandaActual;
+
+    for (const vuelo of vuelosSiguientes) {
+      // Si cambiamos de tanda, incrementar la hora
+      if (vuelo.numero_tanda !== tandaAnterior) {
+        const diferenciaTandas = vuelo.numero_tanda - tandaAnterior;
+        horaSiguiente = new Date(nuevaHora.getTime() + (duracionTanda * diferenciaTandas * 60 * 1000));
+        tandaAnterior = vuelo.numero_tanda;
+      }
+
+      const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
+      vuelo.hora_prevista_salida = new Date(horaSiguiente);
+      await vuelo.save();
+
+      // Notificar si cambió
+      if (horaAnterior && horaAnterior.getTime() !== horaSiguiente.getTime()) {
+        await notificarCambioHora(vuelo, horaAnterior, horaSiguiente);
+      }
+    }
+
+    logger.info(`Recalculadas ${vuelosSiguientes.length} horas de vuelos siguientes a tanda ${tandaActual}`);
+  } catch (error) {
+    logger.error('Error recalculando tandas siguientes:', error);
+  }
+};
+
 // Iniciar vuelo (cambiar estado a en_vuelo)
 export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
