@@ -47,14 +47,21 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
     const buy_order = `ORD${timestamp}${random}`;
     const session_id = `SES${timestamp}`;
 
-    logger.info(`Iniciando pago - Buy Order: ${buy_order}, Monto: ${monto_total}, Return URL: ${TRANSBANK_CONFIG.returnUrl}`);
+    const returnUrl = TRANSBANK_CONFIG.returnUrl;
+    logger.info(`Iniciando pago - Buy Order: ${buy_order}, Monto: ${monto_total}, Return URL: ${returnUrl}`);
+    logger.info(`Variables de entorno - TRANSBANK_RETURN_URL: ${process.env.TRANSBANK_RETURN_URL}, FRONTEND_URL: ${process.env.FRONTEND_URL}`);
+
+    // Validar que tenemos una return URL válida
+    if (!returnUrl || returnUrl === 'null' || returnUrl === 'undefined') {
+      throw new Error('Return URL no configurada correctamente');
+    }
 
     // Crear transacción en Transbank
     const response = await webpayPlus.create(
       buy_order,
       session_id,
       monto_total,
-      TRANSBANK_CONFIG.returnUrl
+      returnUrl
     );
 
     // Guardar transacción en BD

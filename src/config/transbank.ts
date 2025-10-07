@@ -18,5 +18,7 @@ export const TRANSBANK_CONFIG = {
   environment,
   commerceCode,
   // URLs de retorno después del pago
-  returnUrl: process.env.TRANSBANK_RETURN_URL || `${process.env.FRONTEND_URL}/pago/confirmacion`,
+  returnUrl: process.env.TRANSBANK_RETURN_URL
+    || (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/pago/confirmacion` : null)
+    || 'https://fila-aerea-frontend.vercel.app/pago/confirmacion',
 };
