@@ -499,19 +499,20 @@ export const createTanda = async (
     // Calcular hora prevista de salida
     let hora_prevista_salida;
     if (hora_prevista) {
-      // Si se proporciona hora prevista, usarla (mantener hora local, sin conversión UTC)
+      // Si se proporciona hora prevista, guardarla como UTC
+      // La hora recibida (ej: 15:00) se guardará como 15:00 UTC en la BD
       const fechaBase = new Date(fecha_hora);
       const [horas, minutos] = hora_prevista.split(':');
 
-      hora_prevista_salida = new Date(
-        fechaBase.getFullYear(),
-        fechaBase.getMonth(),
-        fechaBase.getDate(),
+      hora_prevista_salida = new Date(Date.UTC(
+        fechaBase.getUTCFullYear(),
+        fechaBase.getUTCMonth(),
+        fechaBase.getUTCDate(),
         parseInt(horas),
         parseInt(minutos),
         0,
         0
-      );
+      ));
     }
 
     const flights = [];
