@@ -73,8 +73,11 @@ export const registerPassenger = async (
 
     // Crear tickets con datos de pasajeros si se proporcionan
     const tickets = [];
+    const baseTimestamp = Date.now();
     for (let i = 1; i <= cantidad_tickets; i++) {
-      const codigo_ticket = `TIX${Date.now()}${i}`.toUpperCase().slice(0, 12);
+      // Generar código único combinando timestamp + índice + random
+      const random = Math.random().toString(36).substr(2, 4).toUpperCase();
+      const codigo_ticket = `TKT-${baseTimestamp}-${i}-${random}`;
       const pasajeroData = pasajeros && pasajeros[i - 1];
 
       const pasajeroInfo = pasajeroData && (pasajeroData.nombre || pasajeroData.apellido || pasajeroData.rut)
@@ -279,8 +282,10 @@ export const updatePassengerTickets = async (
     if (diferencia > 0) {
       // Agregar tickets
       const newTickets = [];
+      const baseTimestamp = Date.now();
       for (let i = 1; i <= diferencia; i++) {
-        const codigo_ticket = `TIX${Date.now()}${i}`.toUpperCase().slice(0, 12);
+        const random = Math.random().toString(36).substr(2, 4).toUpperCase();
+        const codigo_ticket = `TKT-${baseTimestamp}-${i}-${random}`;
         newTickets.push({
           userId: passengerId,
           codigo_ticket,
