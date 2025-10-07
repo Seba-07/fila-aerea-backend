@@ -1,9 +1,30 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth';
 import { Settings, Flight } from '../models';
 import { logger } from '../utils/logger';
 import { sendPushNotification } from '../services/pushNotification';
 import { getIO } from '../sockets';
+
+// Obtener solo el precio del ticket (público - para página de compra)
+export const getPrecioTicket = async (req: Request, res: Response): Promise<void> => {
+  try {
+    let settings = await Settings.findOne();
+
+    // Si no existe, crear configuración por defecto
+    if (!settings) {
+      settings = await Settings.create({
+        duracion_tanda_minutos: 20,
+        max_tandas_sin_reabastecimiento_default: 4,
+        precio_ticket: 15000,
+      });
+    }
+
+    res.json({ precio_ticket: settings.precio_ticket });
+  } catch (error: any) {
+    logger.error('Error en getPrecioTicket:', error);
+    res.status(500).json({ error: 'Error al obtener precio del ticket' });
+  }
+};
 
 // Obtener configuración global
 export const getSettings = async (req: AuthRequest, res: Response): Promise<void> => {

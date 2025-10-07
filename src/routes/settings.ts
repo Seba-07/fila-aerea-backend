@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { getSettings, updateSettings, updateHoraPrevista, updateHoraPrevistaTanda, iniciarVuelo, finalizarVuelo } from '../controllers/settingsController';
+import { getSettings, updateSettings, updateHoraPrevista, updateHoraPrevistaTanda, iniciarVuelo, finalizarVuelo, getPrecioTicket } from '../controllers/settingsController';
 import { authenticate, requireStaff } from '../middlewares/auth';
 
 const router = Router();
+
+// Rutas públicas
+router.get('/precio-ticket', getPrecioTicket); // Público - para página de compra
 
 // Rutas de configuración
 router.get('/', authenticate, getSettings);
