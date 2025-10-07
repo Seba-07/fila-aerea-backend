@@ -374,18 +374,24 @@ const generarManifiestoTanda = async (numeroTanda: number, userId: string) => {
     // Para cada vuelo, obtener los pasajeros inscritos
     const manifiestosPorVuelo = [];
     for (const vuelo of vuelosTanda) {
+      // Buscar tickets inscritos o asignados a este vuelo
       const tickets = await Ticket.find({
         flightId: vuelo._id,
-        estado: 'inscrito',
+        estado: { $in: ['inscrito', 'asignado'] },
       }).populate('userId');
+
+      logger.info(`Vuelo ${vuelo._id} (${(vuelo.aircraftId as any)?.matricula}): ${tickets.length} tickets encontrados`);
 
       const pasajeros = tickets
         .filter(t => t.pasajeros && t.pasajeros.length > 0)
         .map(t => ({
           nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
           rut: t.pasajeros[0].rut || 'Sin RUT',
+          esMenor: t.pasajeros[0].esMenor || false,
           ticketId: t._id,
         }));
+
+      logger.info(`Vuelo ${vuelo._id}: ${pasajeros.length} pasajeros con datos`);
 
       manifiestosPorVuelo.push({
         flightId: vuelo._id,
@@ -408,7 +414,7 @@ const generarManifiestoTanda = async (numeroTanda: number, userId: string) => {
       createdBy: userId,
     });
 
-    logger.info(`Manifiesto creado para tanda ${numeroTanda} con ${todosLosPasajeros.length} pasajeros`);
+    logger.info(`✅ Manifiesto creado para tanda ${numeroTanda} con ${todosLosPasajeros.length} pasajeros total`);
   } catch (error) {
     logger.error('Error generando manifiesto:', error);
   }
@@ -483,23 +489,38 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       .sort({ numero_tanda: 1 })
       .populate('aircraftId');
 
-    // La siguiente tanda sale inmediatamente después del aterrizaje
-    // (sin agregar duración adicional)
+    if (vuelosSiguientes.length === 0) {
+      logger.info('No hay vuelos siguientes para recalcular');
+      return;
+    }
+
+    // La tanda inmediatamente siguiente sale en la hora de aterrizaje
     let horaSiguiente = new Date(horaArribo);
-    let tandaAnterior = tandaActual;
+    let tandaAnteriorProcesada = tandaActual;
 
     for (const vuelo of vuelosSiguientes) {
       const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
 
-      // Si cambiamos de tanda, agregar la duración
-      if (vuelo.numero_tanda !== tandaAnterior) {
-        const saltoTandas = vuelo.numero_tanda - tandaAnterior;
-        horaSiguiente = new Date(horaSiguiente.getTime() + (duracionTanda * saltoTandas * 60 * 1000));
-        tandaAnterior = vuelo.numero_tanda;
+      // Si esta es una nueva tanda (distinta a la anterior que procesamos)
+      if (vuelo.numero_tanda !== tandaAnteriorProcesada) {
+        // Calcular cuántas tandas saltamos
+        const saltoTandas = vuelo.numero_tanda - tandaAnteriorProcesada;
+
+        // Para la primera tanda siguiente (salto = 1), usar hora de aterrizaje directamente
+        // Para tandas más adelante, agregar duración por cada tanda intermedia
+        if (saltoTandas > 1) {
+          // Si saltamos tandas (ej: de tanda 1 a tanda 3), agregar duración por las tandas intermedias
+          horaSiguiente = new Date(horaArribo.getTime() + (duracionTanda * (saltoTandas - 1) * 60 * 1000));
+        }
+        // Si saltoTandas === 1, horaSiguiente ya es horaArribo
+
+        tandaAnteriorProcesada = vuelo.numero_tanda;
       }
 
       vuelo.hora_prevista_salida = new Date(horaSiguiente);
       await vuelo.save();
+
+      logger.info(`✈️  Vuelo ${(vuelo.aircraftId as any)?.matricula} (tanda ${vuelo.numero_tanda}) → ${horaSiguiente.toLocaleTimeString('es-CL')}`);
 
       // Notificar si cambió la hora
       if (horaAnterior && horaAnterior.getTime() !== horaSiguiente.getTime()) {
@@ -507,7 +528,7 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       }
     }
 
-    logger.info(`Recalculadas ${vuelosSiguientes.length} horas después de tanda ${tandaActual}`);
+    logger.info(`✅ Recalculadas ${vuelosSiguientes.length} horas de vuelo después de aterrizaje de tanda ${tandaActual}`);
   } catch (error) {
     logger.error('Error recalculando horas siguientes:', error);
   }

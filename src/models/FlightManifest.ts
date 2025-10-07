@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 export interface IManifestPasajero {
   nombre: string;
   rut: string;
+  esMenor?: boolean;
   ticketId: Types.ObjectId;
 }
 
@@ -41,6 +42,10 @@ const flightManifestSchema = new Schema<IFlightManifest>(
         rut: {
           type: String,
           trim: true,
+        },
+        esMenor: {
+          type: Boolean,
+          default: false,
         },
         ticketId: {
           type: Schema.Types.ObjectId,

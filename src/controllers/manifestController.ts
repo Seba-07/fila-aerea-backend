@@ -71,6 +71,7 @@ export const getManifestByTanda = async (req: AuthRequest, res: Response): Promi
           .map(t => ({
             nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
             rut: t.pasajeros[0].rut || 'Sin RUT',
+            esMenor: t.pasajeros[0].esMenor || false,
           }));
 
         return {
