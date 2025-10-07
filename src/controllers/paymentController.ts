@@ -1,11 +1,8 @@
 import { Request, Response } from 'express';
 import { webpayPlus, TRANSBANK_CONFIG } from '../config/transbank';
-import { Transaction, User, Ticket } from '../models';
+import { Transaction, User, Ticket, Settings } from '../models';
 import { logger } from '../utils/logger';
 import bcrypt from 'bcryptjs';
-
-// Precio por ticket (en CLP)
-const PRECIO_POR_TICKET = 15000;
 
 // Iniciar transacción de pago
 export const iniciarPago = async (req: Request, res: Response): Promise<void> => {
@@ -28,6 +25,17 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
       res.status(400).json({ error: 'La cantidad de pasajeros debe coincidir con la cantidad de tickets' });
       return;
     }
+
+    // Obtener precio del ticket desde configuración
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = await Settings.create({
+        duracion_tanda_minutos: 20,
+        max_tandas_sin_reabastecimiento_default: 4,
+        precio_ticket: 15000,
+      });
+    }
+    const PRECIO_POR_TICKET = settings.precio_ticket;
 
     // Calcular monto total
     const monto_total = PRECIO_POR_TICKET * cantidad_tickets;

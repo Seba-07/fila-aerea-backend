@@ -15,6 +15,7 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
       settings = await Settings.create({
         duracion_tanda_minutos: 20,
         max_tandas_sin_reabastecimiento_default: 4,
+        precio_ticket: 15000,
       });
     }
 
@@ -28,7 +29,7 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
 // Actualizar configuración global
 export const updateSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { duracion_tanda_minutos, max_tandas_sin_reabastecimiento_default, hora_inicio_primera_tanda } = req.body;
+    const { duracion_tanda_minutos, max_tandas_sin_reabastecimiento_default, hora_inicio_primera_tanda, precio_ticket } = req.body;
 
     let settings = await Settings.findOne();
 
@@ -39,6 +40,7 @@ export const updateSettings = async (req: AuthRequest, res: Response): Promise<v
       if (max_tandas_sin_reabastecimiento_default !== undefined)
         settings.max_tandas_sin_reabastecimiento_default = max_tandas_sin_reabastecimiento_default;
       if (hora_inicio_primera_tanda !== undefined) settings.hora_inicio_primera_tanda = hora_inicio_primera_tanda;
+      if (precio_ticket !== undefined) settings.precio_ticket = precio_ticket;
 
       await settings.save();
     }

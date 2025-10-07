@@ -4,6 +4,7 @@ export interface ISettings extends Document {
   duracion_tanda_minutos: number;
   max_tandas_sin_reabastecimiento_default: number;
   hora_inicio_primera_tanda?: Date;
+  precio_ticket: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,6 +25,11 @@ const settingsSchema = new Schema<ISettings>(
     },
     hora_inicio_primera_tanda: {
       type: Date,
+    },
+    precio_ticket: {
+      type: Number,
+      default: 15000,
+      min: 0,
     },
   },
   {
