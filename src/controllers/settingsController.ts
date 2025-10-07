@@ -285,7 +285,7 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
     await flight.save();
 
     // Generar manifiesto para toda la tanda (solo una vez por tanda)
-    await generarManifiestoTanda(flight.numero_tanda, req.user!.id);
+    await generarManifiestoTanda(flight.numero_tanda, req.user!.userId);
 
     logger.info(`Vuelo ${flightId} iniciado (tanda ${flight.numero_tanda})`);
 
