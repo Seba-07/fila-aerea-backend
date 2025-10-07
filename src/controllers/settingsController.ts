@@ -104,8 +104,9 @@ const notificarCambioHora = async (flight: any, horaAnterior: Date, horaNueva: D
       estado: 'inscrito',
     }).populate('userId');
 
-    const horaAnteriorStr = horaAnterior.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-    const horaNuevaStr = horaNueva.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    // Formatear horas usando UTC para mostrar correctamente
+    const horaAnteriorStr = `${String(horaAnterior.getUTCHours()).padStart(2, '0')}:${String(horaAnterior.getUTCMinutes()).padStart(2, '0')}`;
+    const horaNuevaStr = `${String(horaNueva.getUTCHours()).padStart(2, '0')}:${String(horaNueva.getUTCMinutes()).padStart(2, '0')}`;
 
     for (const ticket of tickets) {
       // Marcar ticket con cambio de hora pendiente
