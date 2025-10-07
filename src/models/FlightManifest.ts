@@ -8,8 +8,13 @@ export interface IManifestPasajero {
 
 export interface IFlightManifest extends Document {
   flightId: Types.ObjectId;
+  numero_tanda: number;
   pasajeros: IManifestPasajero[];
   fecha_vuelo: Date;
+  hora_despegue: Date;
+  hora_aterrizaje?: Date;
+  pdf_path?: string;
+  createdBy: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,6 +27,10 @@ const flightManifestSchema = new Schema<IFlightManifest>(
       required: true,
       unique: true,
     },
+    numero_tanda: {
+      type: Number,
+      required: true,
+    },
     pasajeros: [
       {
         nombre: {
@@ -31,7 +40,6 @@ const flightManifestSchema = new Schema<IFlightManifest>(
         },
         rut: {
           type: String,
-          required: true,
           trim: true,
         },
         ticketId: {
@@ -43,6 +51,21 @@ const flightManifestSchema = new Schema<IFlightManifest>(
     ],
     fecha_vuelo: {
       type: Date,
+      required: true,
+    },
+    hora_despegue: {
+      type: Date,
+      required: true,
+    },
+    hora_aterrizaje: {
+      type: Date,
+    },
+    pdf_path: {
+      type: String,
+    },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
       required: true,
     },
   },

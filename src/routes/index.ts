@@ -6,6 +6,7 @@ import staffRoutes from './staff';
 import notificationRoutes from './notifications';
 import pushRoutes from './push';
 import settingsRoutes from './settings';
+import manifestsRoutes from './manifests';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/staff', staffRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/push', pushRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/manifests', manifestsRoutes);
 
 export default router;

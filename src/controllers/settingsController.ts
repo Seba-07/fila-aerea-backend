@@ -268,7 +268,7 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const { flightId } = req.params;
 
-    const flight = await Flight.findById(flightId);
+    const flight = await Flight.findById(flightId).populate('aircraftId');
 
     if (!flight) {
       res.status(404).json({ error: 'Vuelo no encontrado' });
@@ -284,12 +284,77 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
     flight.hora_inicio_vuelo = new Date();
     await flight.save();
 
+    // Generar manifiesto para toda la tanda (solo una vez por tanda)
+    await generarManifiestoTanda(flight.numero_tanda, req.user!.id);
+
     logger.info(`Vuelo ${flightId} iniciado (tanda ${flight.numero_tanda})`);
 
-    res.json({ message: 'Vuelo iniciado', flight });
+    res.json({ message: 'Vuelo iniciado y manifiesto generado', flight });
   } catch (error: any) {
     logger.error('Error en iniciarVuelo:', error);
     res.status(500).json({ error: 'Error al iniciar vuelo' });
+  }
+};
+
+// Generar manifiesto para una tanda completa
+const generarManifiestoTanda = async (numeroTanda: number, userId: string) => {
+  try {
+    const { FlightManifest, Ticket } = await import('../models');
+
+    // Verificar si ya existe un manifiesto para esta tanda
+    const existente = await FlightManifest.findOne({ numero_tanda: numeroTanda });
+    if (existente) {
+      logger.info(`Manifiesto ya existe para tanda ${numeroTanda}`);
+      return;
+    }
+
+    // Obtener todos los vuelos de la tanda
+    const vuelosTanda = await Flight.find({ numero_tanda: numeroTanda })
+      .populate('aircraftId')
+      .sort({ 'aircraftId.matricula': 1 });
+
+    if (vuelosTanda.length === 0) return;
+
+    // Para cada vuelo, obtener los pasajeros inscritos
+    const manifiestosPorVuelo = [];
+    for (const vuelo of vuelosTanda) {
+      const tickets = await Ticket.find({
+        flightId: vuelo._id,
+        estado: 'inscrito',
+      }).populate('userId');
+
+      const pasajeros = tickets
+        .filter(t => t.pasajeros && t.pasajeros.length > 0)
+        .map(t => ({
+          nombre: t.pasajeros[0].nombre,
+          rut: t.pasajeros[0].rut || 'Sin RUT',
+          ticketId: t._id,
+        }));
+
+      manifiestosPorVuelo.push({
+        flightId: vuelo._id,
+        matricula: (vuelo.aircraftId as any).matricula,
+        modelo: (vuelo.aircraftId as any).modelo,
+        pasajeros,
+      });
+    }
+
+    // Crear un manifiesto para el primer vuelo de la tanda (representando toda la tanda)
+    const primerVuelo = vuelosTanda[0];
+    const todosLosPasajeros = manifiestosPorVuelo.flatMap(m => m.pasajeros);
+
+    await FlightManifest.create({
+      flightId: primerVuelo._id,
+      numero_tanda: numeroTanda,
+      pasajeros: todosLosPasajeros,
+      fecha_vuelo: primerVuelo.fecha_hora,
+      hora_despegue: primerVuelo.hora_inicio_vuelo || new Date(),
+      createdBy: userId,
+    });
+
+    logger.info(`Manifiesto creado para tanda ${numeroTanda} con ${todosLosPasajeros.length} pasajeros`);
+  } catch (error) {
+    logger.error('Error generando manifiesto:', error);
   }
 };
 
@@ -310,19 +375,39 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    const horaAterrizaje = new Date();
     flight.estado = 'finalizado';
-    flight.hora_arribo = new Date();
+    flight.hora_arribo = horaAterrizaje;
     await flight.save();
+
+    // Actualizar hora de aterrizaje en el manifiesto
+    await actualizarHoraAterrizajeManifiesto(flight.numero_tanda, horaAterrizaje);
 
     logger.info(`Vuelo ${flightId} finalizado (tanda ${flight.numero_tanda})`);
 
     // Recalcular horas de vuelos siguientes
-    await recalcularHorasSiguientes(flight.numero_tanda, flight.hora_arribo);
+    await recalcularHorasSiguientes(flight.numero_tanda, horaAterrizaje);
 
-    res.json({ message: 'Vuelo finalizado', flight });
+    res.json({ message: 'Vuelo finalizado y manifiesto actualizado', flight });
   } catch (error: any) {
     logger.error('Error en finalizarVuelo:', error);
     res.status(500).json({ error: 'Error al finalizar vuelo' });
+  }
+};
+
+// Actualizar hora de aterrizaje en el manifiesto de la tanda
+const actualizarHoraAterrizajeManifiesto = async (numeroTanda: number, horaAterrizaje: Date) => {
+  try {
+    const { FlightManifest } = await import('../models');
+
+    const manifiesto = await FlightManifest.findOne({ numero_tanda: numeroTanda });
+    if (manifiesto) {
+      manifiesto.hora_aterrizaje = horaAterrizaje;
+      await manifiesto.save();
+      logger.info(`Actualizada hora de aterrizaje en manifiesto de tanda ${numeroTanda}`);
+    }
+  } catch (error) {
+    logger.error('Error actualizando hora de aterrizaje en manifiesto:', error);
   }
 };
 
