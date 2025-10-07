@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { webpayPlus, TRANSBANK_CONFIG } from '../config/transbank';
-import { Transaction, User, Ticket, Settings } from '../models';
+import { Transaction, User, Ticket, Settings, Payment } from '../models';
 import { logger } from '../utils/logger';
 import bcrypt from 'bcryptjs';
 
@@ -180,6 +180,28 @@ export const confirmarPago = async (req: Request, res: Response): Promise<void> 
       }
 
       transaction.ticketIds = ticketIds as any;
+
+      // Crear registro de pago en historial
+      const tipoTarjeta = response.payment_type_code === 'VD' ? 'debito' :
+                         response.payment_type_code === 'VN' ? 'credito' : undefined;
+
+      const descripcionPago = `Compra via Webpay ${tipoTarjeta ? `(${tipoTarjeta})` : ''}` +
+                             (response.installments_number > 0 ? ` en ${response.installments_number} cuotas` : '') +
+                             ` - ${transaction.pasajeros.map(p => `${p.nombre} ${p.apellido}`).join(', ')}`;
+
+      await Payment.create({
+        userId: user._id,
+        monto: transaction.monto_total,
+        metodo_pago: 'webpay',
+        cantidad_tickets: transaction.cantidad_tickets,
+        tipo: 'compra',
+        descripcion: descripcionPago,
+        fecha: new Date(),
+        transactionId: transaction._id,
+        tipo_tarjeta: tipoTarjeta,
+        cuotas: response.installments_number || 0,
+        codigo_autorizacion: response.authorization_code,
+      });
 
       logger.info(`✅ Pago aprobado - ${ticketIds.length} tickets creados para ${user.email}`);
     } else {
