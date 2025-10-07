@@ -499,11 +499,11 @@ export const createTanda = async (
     // Calcular hora prevista de salida
     let hora_prevista_salida;
     if (hora_prevista) {
-      // Si se proporciona hora prevista, usarla
+      // Si se proporciona hora prevista, usarla (mantener hora local, sin conversión UTC)
       const fechaBase = new Date(fecha_hora);
       const [horas, minutos] = hora_prevista.split(':');
 
-      hora_prevista_salida = new Date(Date.UTC(
+      hora_prevista_salida = new Date(
         fechaBase.getFullYear(),
         fechaBase.getMonth(),
         fechaBase.getDate(),
@@ -511,7 +511,7 @@ export const createTanda = async (
         parseInt(minutos),
         0,
         0
-      ));
+      );
     }
 
     const flights = [];
