@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface INotification extends Document {
   userId: Types.ObjectId;
-  tipo: 'recordatorio' | 'boarding' | 'cambio' | 'reprogramacion' | 'cancelacion' | 'reabastecimiento_pendiente';
+  tipo: 'recordatorio' | 'boarding' | 'cambio' | 'reprogramacion' | 'cancelacion' | 'reabastecimiento_pendiente' | 'cambio_hora';
   status: 'pendiente' | 'enviado' | 'error';
   titulo?: string;
   mensaje?: string;
@@ -25,7 +25,7 @@ const notificationSchema = new Schema<INotification>(
     },
     tipo: {
       type: String,
-      enum: ['recordatorio', 'boarding', 'cambio', 'reprogramacion', 'cancelacion', 'reabastecimiento_pendiente'],
+      enum: ['recordatorio', 'boarding', 'cambio', 'reprogramacion', 'cancelacion', 'reabastecimiento_pendiente', 'cambio_hora'],
       required: true,
     },
     status: {

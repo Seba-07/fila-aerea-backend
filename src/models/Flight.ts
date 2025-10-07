@@ -4,6 +4,9 @@ export interface IFlight extends Document {
   aircraftId: Types.ObjectId;
   numero_tanda: number;
   fecha_hora: Date;
+  hora_prevista_salida?: Date;
+  hora_inicio_vuelo?: Date;
+  hora_arribo?: Date;
   capacidad_total: number;
   asientos_ocupados: number;
   estado: 'abierto' | 'en_vuelo' | 'finalizado' | 'reprogramado' | 'cancelado';
@@ -28,6 +31,15 @@ const flightSchema = new Schema<IFlight>(
     fecha_hora: {
       type: Date,
       required: true,
+    },
+    hora_prevista_salida: {
+      type: Date,
+    },
+    hora_inicio_vuelo: {
+      type: Date,
+    },
+    hora_arribo: {
+      type: Date,
     },
     capacidad_total: {
       type: Number,

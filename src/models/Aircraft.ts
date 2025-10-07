@@ -5,6 +5,7 @@ export interface IAircraft extends Document {
   modelo: string;
   capacidad: number;
   habilitado: boolean;
+  max_tandas_sin_reabastecimiento?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +32,10 @@ const aircraftSchema = new Schema<IAircraft>(
     habilitado: {
       type: Boolean,
       default: true,
+    },
+    max_tandas_sin_reabastecimiento: {
+      type: Number,
+      min: 1,
     },
   },
   {
