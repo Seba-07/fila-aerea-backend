@@ -455,7 +455,10 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
 
     if (vuelosPendientesTanda.length === 0) {
       // Este fue el último vuelo de la tanda, recalcular horas siguientes
-      logger.info(`🏁 Último vuelo de tanda ${flight.numero_tanda} finalizado, recalculando horas siguientes...`);
+      logger.info(`🏁 Último vuelo de tanda ${flight.numero_tanda} finalizado a las ${horaAterrizaje.toISOString()}`);
+      logger.info(`   Hora UTC: ${horaAterrizaje.toUTCString()}`);
+      logger.info(`   Hora local: ${horaAterrizaje.toLocaleString('es-CL')}`);
+      logger.info(`   Recalculando horas siguientes...`);
       await recalcularHorasSiguientes(flight.numero_tanda, horaAterrizaje);
     } else {
       logger.info(`⏳ Tanda ${flight.numero_tanda} aún tiene ${vuelosPendientesTanda.length} vuelo(s) pendiente(s)`);
@@ -520,14 +523,22 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       // Calcular hora para esta tanda
       const saltoTandas = numeroTanda - tandaActual;
 
+      logger.info(`📊 Calculando hora para tanda ${numeroTanda}:`);
+      logger.info(`   Tanda actual: ${tandaActual}, Salto: ${saltoTandas} tanda(s)`);
+      logger.info(`   Hora aterrizaje recibida: ${horaArribo.toISOString()}`);
+
       let horaNueva: Date;
       if (saltoTandas === 1) {
         // La tanda inmediatamente siguiente sale a la hora de aterrizaje
         horaNueva = new Date(horaArribo);
+        logger.info(`   ✓ Tanda siguiente inmediata → misma hora de aterrizaje`);
       } else {
         // Tandas más adelante: agregar duración por cada tanda intermedia
-        horaNueva = new Date(horaArribo.getTime() + (duracionTanda * (saltoTandas - 1) * 60 * 1000));
+        const minutosAgregar = duracionTanda * (saltoTandas - 1);
+        horaNueva = new Date(horaArribo.getTime() + (minutosAgregar * 60 * 1000));
+        logger.info(`   ✓ Tanda con salto → agregar ${minutosAgregar} minutos`);
       }
+      logger.info(`   Hora nueva calculada: ${horaNueva.toISOString()}`);
 
       // Aplicar la misma hora a TODOS los vuelos de esta tanda
       for (const vuelo of vuelosPorTanda[numeroTanda]) {
