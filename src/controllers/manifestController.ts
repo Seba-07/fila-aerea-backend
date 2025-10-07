@@ -63,7 +63,7 @@ export const getManifestByTanda = async (req: AuthRequest, res: Response): Promi
 
         const tickets = await Ticket.find({
           flightId: vuelo._id,
-          estado: 'inscrito',
+          estado: { $in: ['inscrito', 'asignado'] },
         });
 
         const pasajeros = tickets

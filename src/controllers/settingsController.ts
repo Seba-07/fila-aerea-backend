@@ -445,10 +445,21 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
     // Actualizar hora de aterrizaje en el manifiesto
     await actualizarHoraAterrizajeManifiesto(flight.numero_tanda, horaAterrizaje);
 
-    logger.info(`Vuelo ${flightId} finalizado (tanda ${flight.numero_tanda})`);
+    logger.info(`✈️ Vuelo ${(flight.aircraftId as any)?.matricula} finalizado (tanda ${flight.numero_tanda})`);
 
-    // Recalcular horas de vuelos siguientes
-    await recalcularHorasSiguientes(flight.numero_tanda, horaAterrizaje);
+    // Verificar si este es el último vuelo de la tanda en finalizar
+    const vuelosPendientesTanda = await Flight.find({
+      numero_tanda: flight.numero_tanda,
+      estado: { $in: ['abierto', 'en_vuelo'] },
+    });
+
+    if (vuelosPendientesTanda.length === 0) {
+      // Este fue el último vuelo de la tanda, recalcular horas siguientes
+      logger.info(`🏁 Último vuelo de tanda ${flight.numero_tanda} finalizado, recalculando horas siguientes...`);
+      await recalcularHorasSiguientes(flight.numero_tanda, horaAterrizaje);
+    } else {
+      logger.info(`⏳ Tanda ${flight.numero_tanda} aún tiene ${vuelosPendientesTanda.length} vuelo(s) pendiente(s)`);
+    }
 
     res.json({ message: 'Vuelo finalizado y manifiesto actualizado', flight });
   } catch (error: any) {
@@ -494,41 +505,47 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       return;
     }
 
-    // La tanda inmediatamente siguiente sale en la hora de aterrizaje
-    let horaSiguiente = new Date(horaArribo);
-    let tandaAnteriorProcesada = tandaActual;
-
+    // Agrupar vuelos por tanda para calcular hora una sola vez por tanda
+    const vuelosPorTanda: { [key: number]: any[] } = {};
     for (const vuelo of vuelosSiguientes) {
-      const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
+      if (!vuelosPorTanda[vuelo.numero_tanda]) {
+        vuelosPorTanda[vuelo.numero_tanda] = [];
+      }
+      vuelosPorTanda[vuelo.numero_tanda].push(vuelo);
+    }
 
-      // Si esta es una nueva tanda (distinta a la anterior que procesamos)
-      if (vuelo.numero_tanda !== tandaAnteriorProcesada) {
-        // Calcular cuántas tandas saltamos
-        const saltoTandas = vuelo.numero_tanda - tandaAnteriorProcesada;
+    const numerosTanda = Object.keys(vuelosPorTanda).map(Number).sort((a, b) => a - b);
 
-        // Para la primera tanda siguiente (salto = 1), usar hora de aterrizaje directamente
-        // Para tandas más adelante, agregar duración por cada tanda intermedia
-        if (saltoTandas > 1) {
-          // Si saltamos tandas (ej: de tanda 1 a tanda 3), agregar duración por las tandas intermedias
-          horaSiguiente = new Date(horaArribo.getTime() + (duracionTanda * (saltoTandas - 1) * 60 * 1000));
-        }
-        // Si saltoTandas === 1, horaSiguiente ya es horaArribo
+    for (const numeroTanda of numerosTanda) {
+      // Calcular hora para esta tanda
+      const saltoTandas = numeroTanda - tandaActual;
 
-        tandaAnteriorProcesada = vuelo.numero_tanda;
+      let horaNueva: Date;
+      if (saltoTandas === 1) {
+        // La tanda inmediatamente siguiente sale a la hora de aterrizaje
+        horaNueva = new Date(horaArribo);
+      } else {
+        // Tandas más adelante: agregar duración por cada tanda intermedia
+        horaNueva = new Date(horaArribo.getTime() + (duracionTanda * (saltoTandas - 1) * 60 * 1000));
       }
 
-      vuelo.hora_prevista_salida = new Date(horaSiguiente);
-      await vuelo.save();
+      // Aplicar la misma hora a TODOS los vuelos de esta tanda
+      for (const vuelo of vuelosPorTanda[numeroTanda]) {
+        const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
 
-      logger.info(`✈️  Vuelo ${(vuelo.aircraftId as any)?.matricula} (tanda ${vuelo.numero_tanda}) → ${horaSiguiente.toLocaleTimeString('es-CL')}`);
+        vuelo.hora_prevista_salida = new Date(horaNueva);
+        await vuelo.save();
 
-      // Notificar si cambió la hora
-      if (horaAnterior && horaAnterior.getTime() !== horaSiguiente.getTime()) {
-        await notificarCambioHora(vuelo, horaAnterior, horaSiguiente);
+        logger.info(`✈️  ${(vuelo.aircraftId as any)?.matricula} (tanda ${vuelo.numero_tanda}) → ${horaNueva.toLocaleTimeString('es-CL')}`);
+
+        // Notificar si cambió la hora
+        if (horaAnterior && horaAnterior.getTime() !== horaNueva.getTime()) {
+          await notificarCambioHora(vuelo, horaAnterior, horaNueva);
+        }
       }
     }
 
-    logger.info(`✅ Recalculadas ${vuelosSiguientes.length} horas de vuelo después de aterrizaje de tanda ${tandaActual}`);
+    logger.info(`✅ Recalculadas ${vuelosSiguientes.length} horas de vuelo en ${numerosTanda.length} tanda(s) después de aterrizaje de tanda ${tandaActual}`);
   } catch (error) {
     logger.error('Error recalculando horas siguientes:', error);
   }
