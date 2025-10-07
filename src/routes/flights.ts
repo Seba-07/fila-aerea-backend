@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  createFlight,
   getFlights,
   getFlightById,
   updateFlightStatus,
@@ -15,6 +16,9 @@ const router = Router();
 // Rutas públicas (requieren autenticación)
 router.get('/', authenticate, getFlights);
 router.get('/:id', authenticate, getFlightById);
+
+// Crear vuelo
+router.post('/', authenticate, requireStaff, createFlight);
 
 // Rutas de staff
 router.patch('/:id/status', authenticate, requireStaff, updateFlightStatus);

@@ -1,8 +1,143 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth';
-import { Flight, Aircraft, Ticket, EventLog } from '../models';
+import { Flight, Aircraft, Ticket, EventLog, Settings } from '../models';
 import { logger } from '../utils/logger';
 import { getIO } from '../sockets';
+
+// Crear nuevo vuelo
+export const createFlight = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { aircraftId, numero_tanda, fecha_hora } = req.body;
+
+    if (!aircraftId || !numero_tanda || !fecha_hora) {
+      res.status(400).json({ error: 'aircraftId, numero_tanda y fecha_hora son requeridos' });
+      return;
+    }
+
+    // Verificar que el avión existe
+    const aircraft = await Aircraft.findById(aircraftId);
+    if (!aircraft) {
+      res.status(404).json({ error: 'Avión no encontrado' });
+      return;
+    }
+
+    // Verificar si ya existe un vuelo para este avión en esta tanda
+    const existingFlight = await Flight.findOne({
+      aircraftId,
+      numero_tanda,
+      estado: { $in: ['abierto', 'en_vuelo'] },
+    });
+
+    if (existingFlight) {
+      res.status(400).json({
+        error: `El avión ${aircraft.matricula} ya tiene un vuelo programado en la tanda ${numero_tanda}`,
+      });
+      return;
+    }
+
+    // Verificar alerta de combustible: ¿cuántas tandas consecutivas lleva este avión?
+    const settings = await Settings.findOne();
+    const maxTandas = aircraft.max_tandas_sin_reabastecimiento || settings?.max_tandas_sin_reabastecimiento_default || 4;
+
+    // Buscar el último reabastecimiento de este avión
+    const { Refueling } = await import('../models');
+    const ultimoReabastecimiento = await Refueling.findOne({ aircraftId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let tandasConsecutivas = 0;
+
+    if (ultimoReabastecimiento) {
+      // Contar vuelos finalizados desde el último reabastecimiento
+      const vuelosDesdeReabastecimiento = await Flight.countDocuments({
+        aircraftId,
+        estado: 'finalizado',
+        createdAt: { $gt: ultimoReabastecimiento.createdAt },
+      });
+      tandasConsecutivas = vuelosDesdeReabastecimiento + 1; // +1 por el vuelo que se va a crear
+    } else {
+      // Si no hay reabastecimientos, contar todos los vuelos del avión
+      const vuelosTotales = await Flight.countDocuments({
+        aircraftId,
+        estado: { $in: ['abierto', 'en_vuelo', 'finalizado'] },
+      });
+      tandasConsecutivas = vuelosTotales + 1;
+    }
+
+    // Calcular hora_prevista_salida automáticamente
+    let hora_prevista_salida: Date | undefined;
+
+    if (settings && settings.hora_inicio_primera_tanda) {
+      const duracionTanda = settings.duracion_tanda_minutos;
+
+      // Si es la tanda 1, usar la hora de inicio configurada
+      if (numero_tanda === 1) {
+        hora_prevista_salida = new Date(settings.hora_inicio_primera_tanda);
+      } else {
+        // Buscar el último vuelo finalizado
+        const ultimoVueloFinalizado = await Flight.findOne({ estado: 'finalizado' })
+          .sort({ hora_arribo: -1 })
+          .lean();
+
+        if (ultimoVueloFinalizado && ultimoVueloFinalizado.hora_arribo) {
+          // Calcular desde el último arribo + duración de tanda
+          hora_prevista_salida = new Date(
+            ultimoVueloFinalizado.hora_arribo.getTime() + duracionTanda * 60 * 1000
+          );
+        } else {
+          // Si no hay vuelos finalizados, calcular desde la hora inicial + (tanda - 1) * duración
+          hora_prevista_salida = new Date(
+            settings.hora_inicio_primera_tanda.getTime() + (numero_tanda - 1) * duracionTanda * 60 * 1000
+          );
+        }
+      }
+    }
+
+    // Crear el vuelo
+    const flight = await Flight.create({
+      aircraftId,
+      numero_tanda,
+      fecha_hora: new Date(fecha_hora),
+      hora_prevista_salida,
+      capacidad_total: aircraft.capacidad,
+      asientos_ocupados: 0,
+      estado: 'abierto',
+    });
+
+    await EventLog.create({
+      type: 'flight_created',
+      entity: 'flight',
+      entityId: flight._id.toString(),
+      userId: req.user?.userId,
+      payload: { numero_tanda, matricula: aircraft.matricula },
+    });
+
+    logger.info(`Vuelo creado: tanda ${numero_tanda}, avión ${aircraft.matricula}`);
+
+    // Verificar alerta de combustible
+    let alertaCombustible = null;
+    if (tandasConsecutivas >= maxTandas) {
+      alertaCombustible = {
+        mensaje: `⚠️ El avión ${aircraft.matricula} está alcanzando el límite de tandas consecutivas sin reabastecimiento`,
+        tandasConsecutivas,
+        maxTandas,
+      };
+
+      logger.warn(
+        `Alerta de combustible: ${aircraft.matricula} lleva ${tandasConsecutivas} tandas consecutivas (máx: ${maxTandas})`
+      );
+    }
+
+    res.status(201).json({
+      message: 'Vuelo creado exitosamente',
+      flight,
+      alertaCombustible,
+    });
+  } catch (error: any) {
+    logger.error('Error en createFlight:', error);
+    res.status(500).json({ error: 'Error al crear vuelo' });
+  }
+};
 
 export const getFlights = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

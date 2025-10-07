@@ -42,8 +42,9 @@ const createStaffUser = async () => {
       // Crear un nuevo usuario staff
       const newStaff = await User.create({
         nombre: 'Staff',
-        apellido: 'Usuario',
-        email: 'staff@test.com',
+        apellido: 'CAC',
+        email: 'staff@cac.cl',
+        password: '$2a$10$YourHashedPasswordHere', // Será reemplazado al hacer login
         verificado: true,
         rol: 'staff',
       });
@@ -53,6 +54,7 @@ const createStaffUser = async () => {
         nombre: `${newStaff.nombre} ${newStaff.apellido}`,
         email: newStaff.email,
       });
+      console.log('\n🔑 Usa la opción "Olvidé mi contraseña" para establecer una contraseña');
     }
 
     process.exit(0);
