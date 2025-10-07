@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/auth';
 import { Settings, Flight } from '../models';
 import { logger } from '../utils/logger';
 import { sendPushNotification } from '../services/pushNotification';
+import { getIO } from '../sockets';
 
 // Obtener configuración global
 export const getSettings = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -142,6 +143,16 @@ const notificarCambioHora = async (flight: any, horaAnterior: Date, horaNueva: D
           tipo: 'cambio_hora',
         }
       );
+
+      // Emitir evento de socket para actualizar frontend en tiempo real
+      const io = getIO();
+      io.to(`user:${ticket.userId.toString()}`).emit('timeChanged', {
+        ticketId: ticket._id.toString(),
+        numero_tanda: flight.numero_tanda,
+        hora_anterior: horaAnteriorStr,
+        hora_nueva: horaNuevaStr,
+        cambio_hora_pendiente: ticket.cambio_hora_pendiente,
+      });
     }
 
     logger.info(`Notificados ${tickets.length} pasajeros sobre cambio de hora en tanda ${flight.numero_tanda}`);
@@ -255,25 +266,27 @@ const recalcularTandasSiguientes = async (tandaActual: number, nuevaHora: Date) 
 
     if (vuelosSiguientes.length === 0) return;
 
-    // Calcular hora base para la siguiente tanda
-    let horaSiguiente = new Date(nuevaHora.getTime() + duracionTanda * 60 * 1000);
+    // Calcular hora incrementalmente para cada tanda
     let tandaAnterior = tandaActual;
+    let horaActual = new Date(nuevaHora);
 
     for (const vuelo of vuelosSiguientes) {
       // Si cambiamos de tanda, incrementar la hora
       if (vuelo.numero_tanda !== tandaAnterior) {
-        const diferenciaTandas = vuelo.numero_tanda - tandaAnterior;
-        horaSiguiente = new Date(nuevaHora.getTime() + (duracionTanda * diferenciaTandas * 60 * 1000));
+        // Calcular cuántas tandas avanzamos
+        const saltoTandas = vuelo.numero_tanda - tandaAnterior;
+        // Sumar la duración por cada tanda
+        horaActual = new Date(horaActual.getTime() + (duracionTanda * saltoTandas * 60 * 1000));
         tandaAnterior = vuelo.numero_tanda;
       }
 
       const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
-      vuelo.hora_prevista_salida = new Date(horaSiguiente);
+      vuelo.hora_prevista_salida = new Date(horaActual);
       await vuelo.save();
 
       // Notificar si cambió
-      if (horaAnterior && horaAnterior.getTime() !== horaSiguiente.getTime()) {
-        await notificarCambioHora(vuelo, horaAnterior, horaSiguiente);
+      if (horaAnterior && horaAnterior.getTime() !== horaActual.getTime()) {
+        await notificarCambioHora(vuelo, horaAnterior, horaActual);
       }
     }
 
