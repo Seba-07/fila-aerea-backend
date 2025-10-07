@@ -108,12 +108,20 @@ const notificarCambioHora = async (flight: any, horaAnterior: Date, horaNueva: D
     const horaNuevaStr = horaNueva.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
 
     for (const ticket of tickets) {
+      // Marcar ticket con cambio de hora pendiente
+      ticket.cambio_hora_pendiente = {
+        hora_anterior: horaAnterior,
+        hora_nueva: horaNueva,
+        fecha_cambio: new Date(),
+      };
+      await ticket.save();
+
       // Crear notificación
       await Notification.create({
         userId: ticket.userId,
         tipo: 'cambio_hora',
         titulo: 'Cambio de Hora de Vuelo',
-        mensaje: `Tu vuelo de la tanda ${flight.numero_tanda} cambió su hora de salida de ${horaAnteriorStr} a ${horaNuevaStr}.`,
+        mensaje: `Tu vuelo de la tanda ${flight.numero_tanda} cambió su hora de salida de ${horaAnteriorStr} a ${horaNuevaStr}. Por favor acepta o rechaza el cambio.`,
         metadata: {
           ticketId: ticket._id.toString(),
           numero_tanda: flight.numero_tanda,
@@ -126,10 +134,11 @@ const notificarCambioHora = async (flight: any, horaAnterior: Date, horaNueva: D
       await sendPushNotification(
         ticket.userId.toString(),
         '⏰ Cambio de Hora de Vuelo',
-        `Tanda ${flight.numero_tanda}: ${horaAnteriorStr} → ${horaNuevaStr}`,
+        `Tanda ${flight.numero_tanda}: ${horaAnteriorStr} → ${horaNuevaStr}. Acepta o rechaza el cambio.`,
         {
           ticketId: ticket._id.toString(),
           numero_tanda: flight.numero_tanda,
+          tipo: 'cambio_hora',
         }
       );
     }

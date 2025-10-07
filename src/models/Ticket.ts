@@ -19,6 +19,11 @@ export interface ITicket extends Document {
     numero_tanda_nueva: number;
     fecha_reprogramacion: Date;
   };
+  cambio_hora_pendiente?: {
+    hora_anterior: Date;
+    hora_nueva: Date;
+    fecha_cambio: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,6 +78,11 @@ const ticketSchema = new Schema<ITicket>(
       numero_tanda_anterior: Number,
       numero_tanda_nueva: Number,
       fecha_reprogramacion: Date,
+    },
+    cambio_hora_pendiente: {
+      hora_anterior: Date,
+      hora_nueva: Date,
+      fecha_cambio: Date,
     },
   },
   {

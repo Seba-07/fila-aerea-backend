@@ -394,3 +394,143 @@ export const inscribeTicket = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ error: 'Error al inscribir ticket' });
   }
 };
+
+// Aceptar cambio de hora
+export const acceptTimeChange = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ticketId } = req.params;
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
+      return;
+    }
+
+    if (!ticket.cambio_hora_pendiente) {
+      res.status(400).json({ error: 'No hay cambio de hora pendiente para este ticket' });
+      return;
+    }
+
+    // Simplemente eliminar el cambio pendiente ya que el vuelo ya tiene la nueva hora
+    ticket.cambio_hora_pendiente = undefined;
+    await ticket.save();
+
+    res.json({ message: 'Cambio de hora aceptado exitosamente', ticket });
+  } catch (error: any) {
+    logger.error('Error en acceptTimeChange:', error);
+    res.status(500).json({ error: 'Error al aceptar cambio de hora' });
+  }
+};
+
+// Rechazar cambio de hora - ofrecer devolución o reprogramación
+export const rejectTimeChange = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ticketId } = req.params;
+    const { accion, monto_devolucion, metodo_pago, numero_tanda_nueva } = req.body;
+
+    const ticket = await Ticket.findById(ticketId).populate('userId flightId');
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
+      return;
+    }
+
+    if (!ticket.cambio_hora_pendiente) {
+      res.status(400).json({ error: 'No hay cambio de hora pendiente para este ticket' });
+      return;
+    }
+
+    const oldFlightId = ticket.flightId;
+
+    // Acción: devolucion
+    if (accion === 'devolucion') {
+      if (!monto_devolucion || monto_devolucion <= 0) {
+        res.status(400).json({ error: 'Monto de devolución es obligatorio' });
+        return;
+      }
+
+      // Decrementar asientos del vuelo
+      if (oldFlightId) {
+        const { Flight } = await import('../models');
+        await Flight.findByIdAndUpdate(oldFlightId, {
+          $inc: { asientos_ocupados: -1 }
+        });
+      }
+
+      // Registrar devolución
+      const { Payment } = await import('../models');
+      const flight: any = ticket.flightId;
+      await Payment.create({
+        userId: ticket.userId,
+        monto: -monto_devolucion,
+        metodo_pago: metodo_pago || 'efectivo',
+        cantidad_tickets: 1,
+        tipo: 'devolucion',
+        descripcion: `Devolución por rechazo de cambio de hora - Tanda ${flight?.numero_tanda}`,
+      });
+
+      // Cancelar ticket
+      ticket.flightId = undefined;
+      ticket.estado = 'cancelado';
+      ticket.cambio_hora_pendiente = undefined;
+      await ticket.save();
+
+      res.json({
+        message: 'Cambio de hora rechazado. Devolución registrada y ticket cancelado',
+        monto_devuelto: monto_devolucion,
+        ticket,
+      });
+      return;
+    }
+
+    // Acción: reprogramar
+    if (accion === 'reprogramar') {
+      if (!numero_tanda_nueva) {
+        res.status(400).json({ error: 'Número de tanda nueva es obligatorio para reprogramar' });
+        return;
+      }
+
+      const { Flight } = await import('../models');
+
+      // Buscar vuelos disponibles en la nueva tanda
+      const vueloNuevo = await Flight.findOne({
+        numero_tanda: numero_tanda_nueva,
+        estado: 'abierto',
+        $expr: { $lt: ['$asientos_ocupados', '$capacidad_total'] }
+      });
+
+      if (!vueloNuevo) {
+        res.status(404).json({ error: 'No hay vuelos disponibles en la tanda seleccionada' });
+        return;
+      }
+
+      // Decrementar vuelo anterior
+      if (oldFlightId) {
+        await Flight.findByIdAndUpdate(oldFlightId, {
+          $inc: { asientos_ocupados: -1 }
+        });
+      }
+
+      // Incrementar vuelo nuevo
+      await Flight.findByIdAndUpdate(vueloNuevo._id, {
+        $inc: { asientos_ocupados: 1 }
+      });
+
+      // Actualizar ticket
+      ticket.flightId = vueloNuevo._id as any;
+      ticket.cambio_hora_pendiente = undefined;
+      await ticket.save();
+
+      res.json({
+        message: 'Ticket reprogramado exitosamente a nueva tanda',
+        tanda_nueva: numero_tanda_nueva,
+        ticket,
+      });
+      return;
+    }
+
+    res.status(400).json({ error: 'Acción no válida. Debe ser "devolucion" o "reprogramar"' });
+  } catch (error: any) {
+    logger.error('Error en rejectTimeChange:', error);
+    res.status(500).json({ error: 'Error al rechazar cambio de hora' });
+  }
+};
