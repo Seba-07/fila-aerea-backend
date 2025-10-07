@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { webpayPlus, TRANSBANK_CONFIG } from '../config/transbank';
 import { Transaction, User, Ticket } from '../models';
 import { logger } from '../utils/logger';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 // Precio por ticket (en CLP)
 const PRECIO_POR_TICKET = 15000;
