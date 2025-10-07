@@ -10,3 +10,4 @@ export { Payment, IPayment } from './Payment';
 export { Refueling, IRefueling } from './Refueling';
 export { PushSubscription, IPushSubscription } from './PushSubscription';
 export { Settings, ISettings } from './Settings';
+export { Transaction, ITransaction, IPasajeroCompra } from './Transaction';
