@@ -336,8 +336,13 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    // Convertir hora actual a zona horaria de Chile (UTC-3)
+    const now = new Date();
+    const offsetChile = 3;
+    const horaInicio = new Date(now.getTime() - (offsetChile * 60 * 60 * 1000));
+
     flight.estado = 'en_vuelo';
-    flight.hora_inicio_vuelo = new Date();
+    flight.hora_inicio_vuelo = horaInicio;
     await flight.save();
 
     // Generar manifiesto para toda la tanda (solo una vez por tanda)
@@ -437,7 +442,16 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    const horaAterrizaje = new Date();
+    // Obtener hora actual del servidor (UTC)
+    const now = new Date();
+
+    // Convertir a hora de Chile (UTC-3)
+    // El servidor está en UTC, pero queremos guardar la hora que corresponde a Chile
+    // Si en Chile son las 19:40, en UTC son las 22:40
+    // Pero queremos que se guarde como 19:40 en UTC para que el frontend muestre 19:40
+    const offsetChile = 3; // Chile está UTC-3, entonces restamos 3 horas
+    const horaAterrizaje = new Date(now.getTime() - (offsetChile * 60 * 60 * 1000));
+
     flight.estado = 'finalizado';
     flight.hora_arribo = horaAterrizaje;
     await flight.save();
