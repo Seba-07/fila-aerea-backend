@@ -499,8 +499,7 @@ export const createTanda = async (
     // Calcular hora prevista de salida
     let hora_prevista_salida;
     if (hora_prevista) {
-      // Si se proporciona hora prevista, guardarla como UTC
-      // La hora recibida (ej: 15:00) se guardará como 15:00 UTC en la BD
+      // Si se proporciona hora prevista (tanda #1), guardarla como UTC
       const fechaBase = new Date(fecha_hora);
       const [horas, minutos] = hora_prevista.split(':');
 
@@ -513,6 +512,21 @@ export const createTanda = async (
         0,
         0
       ));
+    } else if (numero_tanda > 1) {
+      // Si no se proporciona hora (tanda > 1), calcular basándose en la tanda anterior
+      const settings = await Settings.findOne();
+      if (settings && settings.duracion_tanda_minutos) {
+        // Buscar la tanda inmediatamente anterior
+        const tandaAnterior = await Flight.findOne({
+          numero_tanda: numero_tanda - 1
+        }).sort({ numero_tanda: -1 });
+
+        if (tandaAnterior && tandaAnterior.hora_prevista_salida) {
+          // Calcular hora sumando la duración de la tanda
+          const duracionMs = settings.duracion_tanda_minutos * 60 * 1000;
+          hora_prevista_salida = new Date(tandaAnterior.hora_prevista_salida.getTime() + duracionMs);
+        }
+      }
     }
 
     const flights = [];
