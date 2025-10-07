@@ -187,10 +187,20 @@ export const updateHoraPrevistaTanda = async (req: AuthRequest, res: Response): 
       return;
     }
 
-    // Crear fecha completa con la nueva hora
-    const primeraFecha = new Date(vuelosTanda[0].fecha_hora);
+    // Crear fecha completa con la nueva hora (sin conversión de zona horaria)
+    const fechaBase = new Date(vuelosTanda[0].fecha_hora);
     const [horas, minutos] = nueva_hora.split(':');
-    primeraFecha.setHours(parseInt(horas), parseInt(minutos), 0, 0);
+
+    // Crear la fecha usando UTC para evitar problemas de zona horaria
+    const primeraFecha = new Date(Date.UTC(
+      fechaBase.getFullYear(),
+      fechaBase.getMonth(),
+      fechaBase.getDate(),
+      parseInt(horas),
+      parseInt(minutos),
+      0,
+      0
+    ));
 
     // Actualizar todos los vuelos de la tanda
     for (const vuelo of vuelosTanda) {
