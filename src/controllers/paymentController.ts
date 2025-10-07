@@ -47,6 +47,8 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
     const buy_order = `ORD${timestamp}${random}`;
     const session_id = `SES${timestamp}`;
 
+    logger.info(`Iniciando pago - Buy Order: ${buy_order}, Monto: ${monto_total}, Return URL: ${TRANSBANK_CONFIG.returnUrl}`);
+
     // Crear transacción en Transbank
     const response = await webpayPlus.create(
       buy_order,
@@ -80,7 +82,21 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
     });
   } catch (error: any) {
     logger.error('Error iniciando pago:', error);
-    res.status(500).json({ error: 'Error al iniciar el pago', details: error.message });
+
+    // Log más detallado del error
+    if (error.response) {
+      logger.error('Error response:', error.response.data);
+    }
+
+    const errorMessage = error.response?.data?.error_message
+      || error.response?.data
+      || error.message
+      || 'Error desconocido';
+
+    res.status(500).json({
+      error: 'Error al iniciar el pago',
+      details: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)
+    });
   }
 };
 
