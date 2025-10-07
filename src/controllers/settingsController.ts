@@ -336,10 +336,13 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Convertir hora actual a zona horaria de Chile (UTC-3)
+    // Obtener configuración de zona horaria
+    const settings = await Settings.findOne();
+    const timezoneOffset = settings?.timezone_offset_hours || 3;
+
+    // Convertir hora actual a zona horaria local
     const now = new Date();
-    const offsetChile = 3;
-    const horaInicio = new Date(now.getTime() - (offsetChile * 60 * 60 * 1000));
+    const horaInicio = new Date(now.getTime() - (timezoneOffset * 60 * 60 * 1000));
 
     flight.estado = 'en_vuelo';
     flight.hora_inicio_vuelo = horaInicio;
@@ -442,15 +445,16 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // Obtener hora actual del servidor (UTC)
-    const now = new Date();
+    // Obtener configuración de zona horaria
+    const settings = await Settings.findOne();
+    const timezoneOffset = settings?.timezone_offset_hours || 3;
 
-    // Convertir a hora de Chile (UTC-3)
-    // El servidor está en UTC, pero queremos guardar la hora que corresponde a Chile
-    // Si en Chile son las 19:40, en UTC son las 22:40
-    // Pero queremos que se guarde como 19:40 en UTC para que el frontend muestre 19:40
-    const offsetChile = 3; // Chile está UTC-3, entonces restamos 3 horas
-    const horaAterrizaje = new Date(now.getTime() - (offsetChile * 60 * 60 * 1000));
+    // Obtener hora actual del servidor (UTC) y convertir a zona horaria local
+    // El servidor está en UTC, pero queremos guardar la hora local
+    // Si localmente son las 19:40, en UTC son las 22:40 (con offset 3)
+    // Guardamos como 19:40 en UTC para que el frontend muestre 19:40
+    const now = new Date();
+    const horaAterrizaje = new Date(now.getTime() - (timezoneOffset * 60 * 60 * 1000));
 
     flight.estado = 'finalizado';
     flight.hora_arribo = horaAterrizaje;
