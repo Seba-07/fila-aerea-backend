@@ -13,9 +13,9 @@ export const getPrecioTicket = async (req: Request, res: Response): Promise<void
     // Si no existe, crear configuración por defecto
     if (!settings) {
       settings = await Settings.create({
-        duracion_circuito_minutos: 20,
+        duracion_circuito_minutos: 30,
         max_circuitos_sin_reabastecimiento_default: 4,
-        precio_ticket: 15000,
+        precio_ticket: 25000,
       });
     }
 
@@ -34,9 +34,9 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
     // Si no existe, crear configuración por defecto
     if (!settings) {
       settings = await Settings.create({
-        duracion_circuito_minutos: 20,
+        duracion_circuito_minutos: 30,
         max_circuitos_sin_reabastecimiento_default: 4,
-        precio_ticket: 15000,
+        precio_ticket: 25000,
       });
     }
 
@@ -577,5 +577,44 @@ const recalcularHorasSiguientes = async (circuitoActual: number, horaArribo: Dat
     logger.info(`✅ Recalculadas ${vuelosSiguientes.length} horas de vuelo en ${numerosCircuito.length} tanda(s) después de aterrizaje de circuito${circuitoActual}`);
   } catch (error) {
     logger.error('Error recalculando horas siguientes:', error);
+  }
+};
+
+// Recalcular todas las horas de circuitos manteniendo la hora del circuito #1
+export const recalcularHorasCircuitos = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const settings = await Settings.findOne();
+    if (!settings) {
+      res.status(404).json({ error: 'Configuración no encontrada' });
+      return;
+    }
+
+    // Obtener el primer circuito activo (circuito #1)
+    const circuito1 = await Flight.findOne({
+      numero_circuito: 1,
+      estado: { $in: ['abierto', 'en_vuelo'] }
+    }).sort({ numero_circuito: 1 });
+
+    if (!circuito1 || !circuito1.hora_prevista_salida) {
+      res.status(404).json({ error: 'No hay circuito #1 activo con hora prevista' });
+      return;
+    }
+
+    // Usar la hora actual del circuito #1 como base para recalcular los siguientes
+    const horaBase = new Date(circuito1.hora_prevista_salida);
+
+    // Recalcular todos los circuitos siguientes manteniendo la hora del circuito #1
+    await recalcularCircuitosSiguientes(1, horaBase);
+
+    logger.info(`Recalculadas horas de circuitos manteniendo circuito #1 en ${horaBase.toISOString()}`);
+
+    res.json({
+      message: 'Horas de circuitos recalculadas exitosamente',
+      circuito_base: 1,
+      hora_base: horaBase
+    });
+  } catch (error: any) {
+    logger.error('Error en recalcularHorasCircuitos:', error);
+    res.status(500).json({ error: 'Error al recalcular horas de circuitos' });
   }
 };
