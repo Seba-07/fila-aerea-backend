@@ -13,6 +13,7 @@ import { globalLimiter } from './middlewares/rateLimiter';
 import { errorHandler } from './middlewares/errorHandler';
 import routes from './routes';
 import { initSocket } from './sockets';
+import { cleanupExpiredReservations } from './controllers/flightController';
 
 const app = express();
 const server = createServer(app);
@@ -62,6 +63,22 @@ const startServer = async () => {
 
     // Inicializar Socket.IO
     initSocket(server);
+
+    // Iniciar background job para limpiar reservas expiradas
+    // Ejecutar cada 60 segundos (1 minuto)
+    const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute
+    setInterval(() => {
+      cleanupExpiredReservations().catch((error) => {
+        logger.error('Error en cleanup job de reservas:', error);
+      });
+    }, CLEANUP_INTERVAL_MS);
+
+    // Ejecutar una vez al inicio
+    cleanupExpiredReservations().catch((error) => {
+      logger.error('Error en cleanup inicial de reservas:', error);
+    });
+
+    logger.info('✓ Background job de limpieza de reservas iniciado (cada 60 segundos)');
 
     // Iniciar servidor
     server.listen(PORT, () => {

@@ -5,7 +5,7 @@ import {
   removePassengerFromFlight,
   acceptRescheduling,
   rejectRescheduling,
-  rescheduleToChosenTanda,
+  rescheduleToChosenCircuito,
   inscribeTicket,
   acceptTimeChange,
   rejectTimeChange,
@@ -24,7 +24,7 @@ router.post('/tickets/:ticketId/inscribir', authenticate, inscribeTicket);
 // Reprogramaciones
 router.post('/tickets/:ticketId/accept-reschedule', authenticate, acceptRescheduling);
 router.post('/tickets/:ticketId/reject-reschedule', authenticate, rejectRescheduling);
-router.post('/tickets/:ticketId/reschedule', authenticate, rescheduleToChosenTanda);
+router.post('/tickets/:ticketId/reschedule', authenticate, rescheduleToChosenCircuito);
 
 // Cambios de hora
 router.post('/tickets/:ticketId/accept-time-change', authenticate, acceptTimeChange);

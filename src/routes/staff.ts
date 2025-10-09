@@ -7,8 +7,8 @@ import {
   updatePassengerTickets,
   deletePassenger,
   getPayments,
-  createTanda,
-  deleteTanda,
+  createCircuito,
+  deleteCircuito,
 } from '../controllers/staffController';
 import {
   getAircrafts,
@@ -34,9 +34,9 @@ router.patch('/passengers/:passengerId/tickets', authenticate, requireStaff, upd
 router.delete('/passengers/:passengerId', authenticate, requireStaff, deletePassenger);
 router.get('/payments', authenticate, requireStaff, getPayments);
 
-// Tandas
-router.post('/tandas', authenticate, requireStaff, createTanda);
-router.delete('/tandas/:numero_tanda', authenticate, requireStaff, deleteTanda);
+// Circuitos
+router.post('/circuitos', authenticate, requireStaff, createCircuito);
+router.delete('/circuitos/:numero_circuito', authenticate, requireStaff, deleteCircuito);
 
 // Aviones
 router.get('/aircrafts', authenticate, requireStaff, getAircrafts);

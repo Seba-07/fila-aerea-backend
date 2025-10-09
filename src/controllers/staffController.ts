@@ -482,14 +482,14 @@ export const getPayments = async (
 };
 
 // Crear nueva tanda o agregar aviones a tanda existente
-export const createTanda = async (
+export const createCircuito = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
   try {
-    const { numero_tanda, fecha_hora, hora_prevista, aircraftIds } = req.body;
+    const { numero_circuito, fecha_hora, hora_prevista, aircraftIds } = req.body;
 
-    if (!numero_tanda || !fecha_hora || !aircraftIds || !Array.isArray(aircraftIds)) {
+    if (!numero_circuito || !fecha_hora || !aircraftIds || !Array.isArray(aircraftIds)) {
       res.status(400).json({
         error: 'Número de tanda, fecha/hora y lista de aviones son obligatorios',
       });
@@ -498,8 +498,8 @@ export const createTanda = async (
 
     const { Flight, Aircraft, Settings } = await import('../models');
 
-    // Verificar si la tanda existe
-    const existingTanda = await Flight.findOne({ numero_tanda });
+    // Verificar si el circuito existe
+    const existingCircuito = await Flight.findOne({ numero_circuito });
 
     // Calcular hora prevista de salida
     let hora_prevista_salida;
@@ -517,19 +517,19 @@ export const createTanda = async (
         0,
         0
       ));
-    } else if (numero_tanda > 1) {
-      // Si no se proporciona hora (tanda > 1), calcular basándose en la tanda anterior
+    } else if (numero_circuito > 1) {
+      // Si no se proporciona hora (tanda > 1), calcular basándose en el circuito anterior
       const settings = await Settings.findOne();
-      if (settings && settings.duracion_tanda_minutos) {
-        // Buscar la tanda inmediatamente anterior
-        const tandaAnterior = await Flight.findOne({
-          numero_tanda: numero_tanda - 1
-        }).sort({ numero_tanda: -1 });
+      if (settings && settings.duracion_circuito_minutos) {
+        // Buscar el circuito inmediatamente anterior
+        const circuitoAnterior = await Flight.findOne({
+          numero_circuito: numero_circuito - 1
+        }).sort({ numero_circuito: -1 });
 
-        if (tandaAnterior && tandaAnterior.hora_prevista_salida) {
-          // Calcular hora sumando la duración de la tanda
-          const duracionMs = settings.duracion_tanda_minutos * 60 * 1000;
-          hora_prevista_salida = new Date(tandaAnterior.hora_prevista_salida.getTime() + duracionMs);
+        if (circuitoAnterior && circuitoAnterior.hora_prevista_salida) {
+          // Calcular hora sumando la duración de el circuito
+          const duracionMs = settings.duracion_circuito_minutos * 60 * 1000;
+          hora_prevista_salida = new Date(circuitoAnterior.hora_prevista_salida.getTime() + duracionMs);
         }
       }
     }
@@ -537,15 +537,15 @@ export const createTanda = async (
     const flights = [];
 
     for (const aircraftId of aircraftIds) {
-      // Verificar que el avión no esté ya en la tanda con estado activo
+      // Verificar que el avión no esté ya en el circuito con estado activo
       // (ignorar vuelos reprogramados o cancelados)
       const existingFlight = await Flight.findOne({
-        numero_tanda,
+        numero_circuito,
         aircraftId,
         estado: { $in: ['abierto', 'en_vuelo', 'finalizado'] }
       });
       if (existingFlight) {
-        continue; // Saltar aviones que ya están en la tanda activamente
+        continue; // Saltar aviones que ya están en el circuito activamente
       }
 
       const aircraft = await Aircraft.findById(aircraftId);
@@ -556,7 +556,7 @@ export const createTanda = async (
 
       flights.push({
         aircraftId,
-        numero_tanda,
+        numero_circuito,
         fecha_hora: new Date(fecha_hora),
         hora_prevista_salida,
         capacidad_total: aircraft.capacidad,
@@ -573,68 +573,68 @@ export const createTanda = async (
     const createdFlights = await Flight.insertMany(flights);
 
     // Si es una nueva tanda y tiene hora prevista, recalcular tandas siguientes
-    if (!existingTanda && hora_prevista_salida) {
+    if (!existingCircuito && hora_prevista_salida) {
       const settings = await Settings.findOne();
-      if (settings && settings.duracion_tanda_minutos) {
-        const duracionTanda = settings.duracion_tanda_minutos;
+      if (settings && settings.duracion_circuito_minutos) {
+        const duracionCircuito = settings.duracion_circuito_minutos;
 
         // Obtener tandas siguientes
-        const tandasSiguientes = await Flight.find({
-          numero_tanda: { $gt: numero_tanda },
+        const circuitosSiguientes = await Flight.find({
+          numero_circuito: { $gt: numero_circuito },
           estado: { $in: ['abierto', 'en_vuelo'] },
-        }).sort({ numero_tanda: 1 });
+        }).sort({ numero_circuito: 1 });
 
-        if (tandasSiguientes.length > 0) {
-          let tandaAnterior = numero_tanda;
+        if (circuitosSiguientes.length > 0) {
+          let circuitoAnterior = numero_circuito;
           let horaBase = new Date(hora_prevista_salida);
 
-          for (const vuelo of tandasSiguientes) {
-            if (vuelo.numero_tanda !== tandaAnterior) {
-              const diferenciaTandas = vuelo.numero_tanda - tandaAnterior;
-              horaBase = new Date(hora_prevista_salida.getTime() + (duracionTanda * diferenciaTandas * 60 * 1000));
-              tandaAnterior = vuelo.numero_tanda;
+          for (const vuelo of circuitosSiguientes) {
+            if (vuelo.numero_circuito !== circuitoAnterior) {
+              const diferenciaCircuitos = vuelo.numero_circuito - circuitoAnterior;
+              horaBase = new Date(hora_prevista_salida.getTime() + (duracionCircuito * diferenciaCircuitos * 60 * 1000));
+              circuitoAnterior = vuelo.numero_circuito;
             }
 
             vuelo.hora_prevista_salida = new Date(horaBase);
             await vuelo.save();
           }
 
-          logger.info(`Recalculadas ${tandasSiguientes.length} horas de tandas siguientes a tanda ${numero_tanda}`);
+          logger.info(`Recalculadas ${circuitosSiguientes.length} horas de tandas siguientes a tanda ${numero_circuito}`);
         }
       }
     }
 
     await EventLog.create({
-      type: existingTanda ? 'tanda_aircraft_added' : 'tanda_created',
+      type: existingCircuito ? 'circuito_aircraft_added' : 'circuito_created',
       entity: 'flight',
-      entityId: String(numero_tanda),
+      entityId: String(numero_circuito),
       userId: req.user?.userId,
-      payload: { numero_tanda, fecha_hora, hora_prevista, aircraftIds },
+      payload: { numero_circuito, fecha_hora, hora_prevista, aircraftIds },
     });
 
     res.json({
-      message: existingTanda ? 'Aviones agregados a la tanda exitosamente' : 'Tanda creada exitosamente',
+      message: existingCircuito ? 'Aviones agregados a el circuito exitosamente' : 'Circuito creado exitosamente',
       flights: createdFlights,
     });
   } catch (error: any) {
-    logger.error('Error en createTanda:', error);
+    logger.error('Error en createCircuito:', error);
     res.status(500).json({ error: 'Error al crear tanda' });
   }
 };
 
 // Eliminar tanda completa
-export const deleteTanda = async (
+export const deleteCircuito = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
   try {
-    const { numero_tanda } = req.params;
+    const { numero_circuito } = req.params;
 
     const { Flight } = await import('../models');
-    const flights = await Flight.find({ numero_tanda: Number(numero_tanda) });
+    const flights = await Flight.find({ numero_circuito: Number(numero_circuito) });
 
     if (flights.length === 0) {
-      res.status(404).json({ error: 'Tanda no encontrada' });
+      res.status(404).json({ error: 'Circuito no encontrado' });
       return;
     }
 
@@ -642,25 +642,25 @@ export const deleteTanda = async (
     const flightsWithPassengers = flights.filter(f => f.asientos_ocupados > 0);
     if (flightsWithPassengers.length > 0) {
       res.status(400).json({
-        error: `No se puede eliminar la tanda. ${flightsWithPassengers.length} vuelo(s) tienen pasajeros inscritos.`,
+        error: `No se puede eliminar el circuito. ${flightsWithPassengers.length} vuelo(s) tienen pasajeros inscritos.`,
       });
       return;
     }
 
-    // Eliminar todos los vuelos de la tanda
-    await Flight.deleteMany({ numero_tanda: Number(numero_tanda) });
+    // Eliminar todos los vuelos de el circuito
+    await Flight.deleteMany({ numero_circuito: Number(numero_circuito) });
 
     await EventLog.create({
-      type: 'tanda_deleted',
+      type: 'circuito_deleted',
       entity: 'flight',
-      entityId: numero_tanda,
+      entityId: numero_circuito,
       userId: req.user?.userId,
-      payload: { numero_tanda },
+      payload: { numero_circuito },
     });
 
-    res.json({ message: 'Tanda eliminada exitosamente' });
+    res.json({ message: 'Circuito eliminado exitosamente' });
   } catch (error: any) {
-    logger.error('Error en deleteTanda:', error);
+    logger.error('Error en deleteCircuito:', error);
     res.status(500).json({ error: 'Error al eliminar tanda' });
   }
 };

@@ -1,9 +1,9 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISettings extends Document {
-  duracion_tanda_minutos: number;
-  max_tandas_sin_reabastecimiento_default: number;
-  hora_inicio_primera_tanda?: Date;
+  duracion_circuito_minutos: number; // Previously: duracion_tanda_minutos
+  max_circuitos_sin_reabastecimiento_default: number; // Previously: max_tandas_sin_reabastecimiento_default
+  hora_inicio_primer_circuito?: Date; // Previously: hora_inicio_primera_tanda
   precio_ticket: number;
   timezone_offset_hours: number; // Offset de zona horaria (3 para verano UTC-3, 4 para invierno UTC-4)
   createdAt: Date;
@@ -12,19 +12,19 @@ export interface ISettings extends Document {
 
 const settingsSchema = new Schema<ISettings>(
   {
-    duracion_tanda_minutos: {
+    duracion_circuito_minutos: {
       type: Number,
       default: 20,
       min: 5,
       max: 60,
     },
-    max_tandas_sin_reabastecimiento_default: {
+    max_circuitos_sin_reabastecimiento_default: {
       type: Number,
       default: 4,
       min: 1,
       max: 20,
     },
-    hora_inicio_primera_tanda: {
+    hora_inicio_primer_circuito: {
       type: Date,
     },
     precio_ticket: {

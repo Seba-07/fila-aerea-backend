@@ -1,16 +1,16 @@
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AuthRequest } from '../middlewares/auth';
-import { Flight, Aircraft, Ticket, EventLog, Settings } from '../models';
+import { Flight, Aircraft, Ticket, EventLog, Settings, Reservation } from '../models';
 import { logger } from '../utils/logger';
 import { getIO } from '../sockets';
 
 // Crear nuevo vuelo
 export const createFlight = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { aircraftId, numero_tanda, fecha_hora } = req.body;
+    const { aircraftId, numero_circuito, fecha_hora } = req.body;
 
-    if (!aircraftId || !numero_tanda || !fecha_hora) {
-      res.status(400).json({ error: 'aircraftId, numero_tanda y fecha_hora son requeridos' });
+    if (!aircraftId || !numero_circuito || !fecha_hora) {
+      res.status(400).json({ error: 'aircraftId, numero_circuito y fecha_hora son requeridos' });
       return;
     }
 
@@ -21,23 +21,23 @@ export const createFlight = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Verificar si ya existe un vuelo para este avión en esta tanda
+    // Verificar si ya existe un vuelo para este avión en este circuito
     const existingFlight = await Flight.findOne({
       aircraftId,
-      numero_tanda,
+      numero_circuito,
       estado: { $in: ['abierto', 'en_vuelo'] },
     });
 
     if (existingFlight) {
       res.status(400).json({
-        error: `El avión ${aircraft.matricula} ya tiene un vuelo programado en la tanda ${numero_tanda}`,
+        error: `El avión ${aircraft.matricula} ya tiene un vuelo programado en el circuito ${numero_circuito}`,
       });
       return;
     }
 
-    // Verificar alerta de combustible: ¿cuántas tandas consecutivas lleva este avión?
+    // Verificar alerta de combustible: ¿cuántos circuitos consecutivos lleva este avión?
     const settings = await Settings.findOne();
-    const maxTandas = aircraft.max_tandas_sin_reabastecimiento || settings?.max_tandas_sin_reabastecimiento_default || 4;
+    const maxCircuitos = aircraft.max_circuitos_sin_reabastecimiento || settings?.max_circuitos_sin_reabastecimiento_default || 4;
 
     // Buscar el último reabastecimiento de este avión
     const { Refueling } = await import('../models');
@@ -45,7 +45,7 @@ export const createFlight = async (req: AuthRequest, res: Response): Promise<voi
       .sort({ createdAt: -1 })
       .lean();
 
-    let tandasConsecutivas = 0;
+    let circuitosConsecutivos = 0;
 
     if (ultimoReabastecimiento) {
       // Contar vuelos finalizados desde el último reabastecimiento
@@ -54,25 +54,25 @@ export const createFlight = async (req: AuthRequest, res: Response): Promise<voi
         estado: 'finalizado',
         createdAt: { $gt: ultimoReabastecimiento.createdAt },
       });
-      tandasConsecutivas = vuelosDesdeReabastecimiento + 1; // +1 por el vuelo que se va a crear
+      circuitosConsecutivos = vuelosDesdeReabastecimiento + 1; // +1 por el vuelo que se va a crear
     } else {
       // Si no hay reabastecimientos, contar todos los vuelos del avión
       const vuelosTotales = await Flight.countDocuments({
         aircraftId,
         estado: { $in: ['abierto', 'en_vuelo', 'finalizado'] },
       });
-      tandasConsecutivas = vuelosTotales + 1;
+      circuitosConsecutivos = vuelosTotales + 1;
     }
 
     // Calcular hora_prevista_salida automáticamente
     let hora_prevista_salida: Date | undefined;
 
-    if (settings && settings.hora_inicio_primera_tanda) {
-      const duracionTanda = settings.duracion_tanda_minutos;
+    if (settings && settings.hora_inicio_primer_circuito) {
+      const duracionCircuito = settings.duracion_circuito_minutos;
 
-      // Si es la tanda 1, usar la hora de inicio configurada
-      if (numero_tanda === 1) {
-        hora_prevista_salida = new Date(settings.hora_inicio_primera_tanda);
+      // Si es la circuito1, usar la hora de inicio configurada
+      if (numero_circuito === 1) {
+        hora_prevista_salida = new Date(settings.hora_inicio_primer_circuito);
       } else {
         // Buscar el último vuelo finalizado
         const ultimoVueloFinalizado = await Flight.findOne({ estado: 'finalizado' })
@@ -80,14 +80,14 @@ export const createFlight = async (req: AuthRequest, res: Response): Promise<voi
           .lean();
 
         if (ultimoVueloFinalizado && ultimoVueloFinalizado.hora_arribo) {
-          // Calcular desde el último arribo + duración de tanda
+          // Calcular desde el último arribo + duración de circuito
           hora_prevista_salida = new Date(
-            ultimoVueloFinalizado.hora_arribo.getTime() + duracionTanda * 60 * 1000
+            ultimoVueloFinalizado.hora_arribo.getTime() + duracionCircuito * 60 * 1000
           );
         } else {
           // Si no hay vuelos finalizados, calcular desde la hora inicial + (tanda - 1) * duración
           hora_prevista_salida = new Date(
-            settings.hora_inicio_primera_tanda.getTime() + (numero_tanda - 1) * duracionTanda * 60 * 1000
+            settings.hora_inicio_primer_circuito.getTime() + (numero_circuito - 1) * duracionCircuito * 60 * 1000
           );
         }
       }
@@ -96,7 +96,7 @@ export const createFlight = async (req: AuthRequest, res: Response): Promise<voi
     // Crear el vuelo
     const flight = await Flight.create({
       aircraftId,
-      numero_tanda,
+      numero_circuito,
       fecha_hora: new Date(fecha_hora),
       hora_prevista_salida,
       capacidad_total: aircraft.capacidad,
@@ -109,22 +109,22 @@ export const createFlight = async (req: AuthRequest, res: Response): Promise<voi
       entity: 'flight',
       entityId: flight._id.toString(),
       userId: req.user?.userId,
-      payload: { numero_tanda, matricula: aircraft.matricula },
+      payload: { numero_circuito, matricula: aircraft.matricula },
     });
 
-    logger.info(`Vuelo creado: tanda ${numero_tanda}, avión ${aircraft.matricula}`);
+    logger.info(`Vuelo creado: circuito${numero_circuito}, avión ${aircraft.matricula}`);
 
     // Verificar alerta de combustible
     let alertaCombustible = null;
-    if (tandasConsecutivas >= maxTandas) {
+    if (circuitosConsecutivos >= maxCircuitos) {
       alertaCombustible = {
-        mensaje: `⚠️ El avión ${aircraft.matricula} está alcanzando el límite de tandas consecutivas sin reabastecimiento`,
-        tandasConsecutivas,
-        maxTandas,
+        mensaje: `⚠️ El avión ${aircraft.matricula} está alcanzando el límite de circuitos consecutivas sin reabastecimiento`,
+        circuitosConsecutivos,
+        maxCircuitos,
       };
 
       logger.warn(
-        `Alerta de combustible: ${aircraft.matricula} lleva ${tandasConsecutivas} tandas consecutivas (máx: ${maxTandas})`
+        `Alerta de combustible: ${aircraft.matricula} lleva ${circuitosConsecutivos} circuitos consecutivos (máx: ${maxCircuitos})`
       );
     }
 
@@ -307,7 +307,7 @@ export const updateFlightCapacity = async (
   }
 };
 
-export const rescheduleFlightToNextTanda = async (
+export const rescheduleFlightToNextCircuito = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
@@ -337,34 +337,34 @@ export const rescheduleFlightToNextTanda = async (
     }
 
     const aircraftId = flight.aircraftId;
-    const tandaActual = flight.numero_tanda;
+    const circuitoActual = flight.numero_circuito;
 
-    // Buscar la siguiente tanda (sin importar el avión)
-    const anyNextTanda = await Flight.findOne({
-      numero_tanda: { $gt: tandaActual },
+    // Buscar la siguiente circuito(sin importar el avión)
+    const anyNextCircuito = await Flight.findOne({
+      numero_circuito: { $gt: circuitoActual },
       estado: 'abierto',
-    }).sort({ numero_tanda: 1 });
+    }).sort({ numero_circuito: 1 });
 
-    if (!anyNextTanda) {
+    if (!anyNextCircuito) {
       res.status(404).json({
-        error: 'No hay tandas siguientes disponibles',
+        error: 'No hay circuitos siguientes disponibles',
       });
       return;
     }
 
-    let tandaSiguiente = anyNextTanda.numero_tanda;
-    let nuevaTandaCreada = false;
-    let tandaDesplazada = null;
+    let circuitoSiguiente = anyNextCircuito.numero_circuito;
+    let nuevoCircuitoCreado = false;
+    let circuitoDesplazado = null;
 
     // Verificar si este avión ya tiene un vuelo en la siguiente tanda
-    let nextTandaFlight = await Flight.findOne({
+    let nextCircuitoFlight = await Flight.findOne({
       aircraftId,
-      numero_tanda: tandaSiguiente,
+      numero_circuito: circuitoSiguiente,
       estado: 'abierto',
     });
 
-    // Si el avión ya existe en la siguiente tanda, mover ese vuelo a una nueva tanda (efecto dominó)
-    if (nextTandaFlight) {
+    // Si el avión ya existe en la siguiente tanda, mover ese vuelo a una nueva circuito(efecto dominó)
+    if (nextCircuitoFlight) {
       const { Aircraft, Ticket } = await import('../models');
       const aircraft = await Aircraft.findById(aircraftId);
 
@@ -373,48 +373,48 @@ export const rescheduleFlightToNextTanda = async (
         return;
       }
 
-      // Buscar la primera tanda disponible donde este avión NO tenga un vuelo
-      let nuevaTandaNum = tandaSiguiente + 1;
-      let tandaDisponibleEncontrada = false;
+      // Buscar la primera circuitodisponible donde este avión NO tenga un vuelo
+      let nuevoCircuitoNum = circuitoSiguiente + 1;
+      let circuitoDisponibleEncontrado = false;
 
-      while (!tandaDisponibleEncontrada) {
-        const existeVueloEnTanda = await Flight.findOne({
+      while (!circuitoDisponibleEncontrado) {
+        const existeVueloEnCircuito = await Flight.findOne({
           aircraftId,
-          numero_tanda: nuevaTandaNum,
+          numero_circuito: nuevoCircuitoNum,
           estado: 'abierto',
         });
 
-        if (!existeVueloEnTanda) {
-          tandaDisponibleEncontrada = true;
+        if (!existeVueloEnCircuito) {
+          circuitoDisponibleEncontrado = true;
         } else {
-          nuevaTandaNum++;
+          nuevoCircuitoNum++;
         }
       }
 
       // Buscar la fecha de esta tanda, o usar la última + 1 hora
-      const tandaConFecha = await Flight.findOne({
-        numero_tanda: nuevaTandaNum,
+      const circuitoConFecha = await Flight.findOne({
+        numero_circuito: nuevoCircuitoNum,
         estado: 'abierto',
       });
 
       let nuevaFecha: Date;
-      if (tandaConFecha) {
-        nuevaFecha = tandaConFecha.fecha_hora;
+      if (circuitoConFecha) {
+        nuevaFecha = circuitoConFecha.fecha_hora;
       } else {
-        // Si no existe la tanda, calcular 1 hora después de la última
-        const maxTandaFlight = await Flight.findOne().sort({ numero_tanda: -1 });
-        const lastTandaDate = maxTandaFlight ? maxTandaFlight.fecha_hora : anyNextTanda.fecha_hora;
-        nuevaFecha = new Date(lastTandaDate);
+        // Si no existe el circuito, calcular 1 hora después de la última
+        const maxCircuitoFlight = await Flight.findOne().sort({ numero_circuito: -1 });
+        const lastCircuitoDate = maxCircuitoFlight ? maxCircuitoFlight.fecha_hora : anyNextCircuito.fecha_hora;
+        nuevaFecha = new Date(lastCircuitoDate);
         nuevaFecha.setHours(nuevaFecha.getHours() + 1);
       }
 
-      const oldFlightId = nextTandaFlight._id;
-      const oldTandaNum = nextTandaFlight.numero_tanda;
+      const oldFlightId = nextCircuitoFlight._id;
+      const oldCircuitoNum = nextCircuitoFlight.numero_circuito;
 
       // Mover el vuelo existente a la nueva tanda
-      nextTandaFlight.numero_tanda = nuevaTandaNum;
-      nextTandaFlight.fecha_hora = nuevaFecha;
-      await nextTandaFlight.save();
+      nextCircuitoFlight.numero_circuito = nuevoCircuitoNum;
+      nextCircuitoFlight.fecha_hora = nuevaFecha;
+      await nextCircuitoFlight.save();
 
       // Mover también los pasajeros de ese vuelo (si los hay)
       const ticketsDesplazados = await Ticket.find({
@@ -425,11 +425,11 @@ export const rescheduleFlightToNextTanda = async (
       // Mover automáticamente a los pasajeros desplazados
       for (const ticket of ticketsDesplazados) {
         // Actualizar flightId al vuelo movido (que ahora está en la nueva tanda)
-        ticket.flightId = nextTandaFlight._id as any;
+        ticket.flightId = nextCircuitoFlight._id as any;
         ticket.reprogramacion_pendiente = {
-          nuevo_flightId: nextTandaFlight._id as any,
-          numero_tanda_anterior: oldTandaNum,
-          numero_tanda_nueva: nuevaTandaNum,
+          nuevo_flightId: nextCircuitoFlight._id as any,
+          numero_circuito_anterior: oldCircuitoNum,
+          numero_circuito_nuevo: nuevoCircuitoNum,
           fecha_reprogramacion: new Date(),
         };
         await ticket.save();
@@ -440,11 +440,11 @@ export const rescheduleFlightToNextTanda = async (
           userId: ticket.userId,
           tipo: 'reprogramacion',
           titulo: 'Vuelo Reprogramado en Cascada',
-          mensaje: `Tu vuelo de la tanda ${oldTandaNum} ha sido reprogramado automáticamente a la tanda ${nuevaTandaNum} debido a ajustes en la programación.`,
+          mensaje: `Tu vuelo de la circuito${oldCircuitoNum} ha sido reprogramado automáticamente a la circuito${nuevoCircuitoNum} debido a ajustes en la programación.`,
           metadata: {
             ticketId: ticket._id.toString(),
-            tanda_anterior: oldTandaNum,
-            tanda_nueva: nuevaTandaNum,
+            circuito_anterior: oldCircuitoNum,
+            circuito_nuevo: nuevoCircuitoNum,
           },
         });
 
@@ -453,35 +453,35 @@ export const rescheduleFlightToNextTanda = async (
         await sendPushNotification(
           ticket.userId.toString(),
           '✈️ Vuelo Reprogramado',
-          `Tu vuelo de la tanda ${oldTandaNum} ha sido reprogramado a la tanda ${nuevaTandaNum}.`,
+          `Tu vuelo de la circuito${oldCircuitoNum} ha sido reprogramado a la circuito${nuevoCircuitoNum}.`,
           {
             ticketId: ticket._id.toString(),
-            tanda_anterior: oldTandaNum,
-            tanda_nueva: nuevaTandaNum,
+            circuito_anterior: oldCircuitoNum,
+            circuito_nuevo: nuevoCircuitoNum,
           }
         );
 
-        logger.info(`Ticket ${ticket._id} desplazado de tanda ${oldTandaNum} a ${nuevaTandaNum}`);
+        logger.info(`Ticket ${ticket._id} desplazado de circuito${oldCircuitoNum} a ${nuevoCircuitoNum}`);
       }
 
-      logger.info(`Vuelo desplazado de tanda ${oldTandaNum} a ${nuevaTandaNum} con ${ticketsDesplazados.length} pasajeros`);
+      logger.info(`Vuelo desplazado de circuito${oldCircuitoNum} a ${nuevoCircuitoNum} con ${ticketsDesplazados.length} pasajeros`);
 
-      nuevaTandaCreada = true;
-      tandaDesplazada = {
-        numero_tanda: nuevaTandaNum,
+      nuevoCircuitoCreado = true;
+      circuitoDesplazado = {
+        numero_circuito: nuevoCircuitoNum,
         matricula: aircraft.matricula,
       };
 
-      // Ahora crear el vuelo para el avión actual en la tanda siguiente
-      nextTandaFlight = await Flight.create({
+      // Ahora crear el vuelo para el avión actual en la circuitosiguiente
+      nextCircuitoFlight = await Flight.create({
         aircraftId,
-        numero_tanda: tandaSiguiente,
-        fecha_hora: anyNextTanda.fecha_hora,
+        numero_circuito: circuitoSiguiente,
+        fecha_hora: anyNextCircuito.fecha_hora,
         capacidad_total: aircraft.capacidad,
         asientos_ocupados: 0,
         estado: 'abierto',
       });
-    } else if (!nextTandaFlight) {
+    } else if (!nextCircuitoFlight) {
       // Si no existe, crear el vuelo para este avión en la siguiente tanda
       const { Aircraft } = await import('../models');
       const aircraft = await Aircraft.findById(aircraftId);
@@ -491,10 +491,10 @@ export const rescheduleFlightToNextTanda = async (
         return;
       }
 
-      nextTandaFlight = await Flight.create({
+      nextCircuitoFlight = await Flight.create({
         aircraftId,
-        numero_tanda: tandaSiguiente,
-        fecha_hora: anyNextTanda.fecha_hora,
+        numero_circuito: circuitoSiguiente,
+        fecha_hora: anyNextCircuito.fecha_hora,
         capacidad_total: aircraft.capacidad,
         asientos_ocupados: 0,
         estado: 'abierto',
@@ -514,11 +514,11 @@ export const rescheduleFlightToNextTanda = async (
     // Mover pasajeros automáticamente al nuevo vuelo
     for (const ticket of ticketsAfectados) {
       // Actualizar el flightId al nuevo vuelo
-      ticket.flightId = nextTandaFlight._id as any;
+      ticket.flightId = nextCircuitoFlight._id as any;
       ticket.reprogramacion_pendiente = {
-        nuevo_flightId: nextTandaFlight._id as any,
-        numero_tanda_anterior: tandaActual,
-        numero_tanda_nueva: tandaSiguiente,
+        nuevo_flightId: nextCircuitoFlight._id as any,
+        numero_circuito_anterior: circuitoActual,
+        numero_circuito_nuevo: circuitoSiguiente,
         fecha_reprogramacion: new Date(),
       };
       await ticket.save();
@@ -529,11 +529,11 @@ export const rescheduleFlightToNextTanda = async (
         userId: ticket.userId,
         tipo: 'reprogramacion',
         titulo: 'Vuelo Reprogramado',
-        mensaje: `Tu vuelo de la tanda ${tandaActual} ha sido reprogramado automáticamente a la tanda ${tandaSiguiente}.`,
+        mensaje: `Tu vuelo de la circuito${circuitoActual} ha sido reprogramado automáticamente a la circuito${circuitoSiguiente}.`,
         metadata: {
           ticketId: ticket._id.toString(),
-          tanda_anterior: tandaActual,
-          tanda_nueva: tandaSiguiente,
+          circuito_anterior: circuitoActual,
+          circuito_nuevo: circuitoSiguiente,
         },
       });
 
@@ -542,27 +542,27 @@ export const rescheduleFlightToNextTanda = async (
       await sendPushNotification(
         ticket.userId.toString(),
         '✈️ Vuelo Reprogramado',
-        `Tu vuelo de la tanda ${tandaActual} ha sido reprogramado a la tanda ${tandaSiguiente}.`,
+        `Tu vuelo de la circuito${circuitoActual} ha sido reprogramado a la circuito${circuitoSiguiente}.`,
         {
           ticketId: ticket._id.toString(),
-          tanda_anterior: tandaActual,
-          tanda_nueva: tandaSiguiente,
+          circuito_anterior: circuitoActual,
+          circuito_nuevo: circuitoSiguiente,
         }
       );
 
-      logger.info(`Ticket ${ticket._id} movido de tanda ${tandaActual} a ${tandaSiguiente}`);
+      logger.info(`Ticket ${ticket._id} movido de circuito${circuitoActual} a ${circuitoSiguiente}`);
     }
 
     // Actualizar contadores de asientos
-    nextTandaFlight.asientos_ocupados += ticketsAfectados.length;
-    await nextTandaFlight.save();
+    nextCircuitoFlight.asientos_ocupados += ticketsAfectados.length;
+    await nextCircuitoFlight.save();
 
     flight.asientos_ocupados = 0; // Resetear contador del vuelo viejo
     flight.estado = 'reprogramado';
     flight.razon_reprogramacion = razon;
     await flight.save();
 
-    logger.info(`${ticketsAfectados.length} pasajeros movidos de tanda ${tandaActual} a ${tandaSiguiente}`);
+    logger.info(`${ticketsAfectados.length} pasajeros movidos de circuito${circuitoActual} a ${circuitoSiguiente}`);
 
     // Si la razón es combustible, crear notificación de reabastecimiento para staff
     if (razon === 'combustible') {
@@ -596,26 +596,26 @@ export const rescheduleFlightToNextTanda = async (
       entityId: flight._id.toString(),
       userId: req.user?.userId,
       payload: {
-        tanda_anterior: tandaActual,
-        tanda_nueva: tandaSiguiente,
+        circuito_anterior: circuitoActual,
+        circuito_nuevo: circuitoSiguiente,
         pasajeros_afectados: ticketsAfectados.length,
-        nueva_tanda_creada: nuevaTandaCreada,
-        tanda_desplazada: tandaDesplazada,
+        nuevo_circuito_creado: nuevoCircuitoCreado,
+        tanda_desplazada: circuitoDesplazado,
       },
     });
 
     const io = getIO();
     io.emit('flightRescheduled', {
       flightId: flight._id,
-      tanda_anterior: tandaActual,
-      tanda_nueva: tandaSiguiente,
-      nueva_tanda_creada: nuevaTandaCreada,
-      tanda_desplazada: tandaDesplazada,
+      circuito_anterior: circuitoActual,
+      circuito_nuevo: circuitoSiguiente,
+      nuevo_circuito_creado: nuevoCircuitoCreado,
+      tanda_desplazada: circuitoDesplazado,
     });
 
     let message = 'Vuelo reprogramado exitosamente';
-    if (nuevaTandaCreada && tandaDesplazada) {
-      message += `. Se creó la Tanda #${tandaDesplazada.numero_tanda} con el vuelo ${tandaDesplazada.matricula} que estaba en la Tanda #${tandaSiguiente}`;
+    if (nuevoCircuitoCreado && circuitoDesplazado) {
+      message += `. Se creó la Circuito #${circuitoDesplazado.numero_circuito} con el vuelo ${circuitoDesplazado.matricula} que estaba en la Circuito #${circuitoSiguiente}`;
     }
     if (razon === 'combustible') {
       message += '. IMPORTANTE: Debes registrar el reabastecimiento del avión en el sistema.';
@@ -624,9 +624,9 @@ export const rescheduleFlightToNextTanda = async (
     res.json({
       message,
       pasajeros_afectados: ticketsAfectados.length,
-      tanda_nueva: tandaSiguiente,
-      nueva_tanda_creada: nuevaTandaCreada,
-      tanda_desplazada: tandaDesplazada,
+      circuito_nuevo: circuitoSiguiente,
+      nuevo_circuito_creado: nuevoCircuitoCreado,
+      tanda_desplazada: circuitoDesplazado,
       requiere_reabastecimiento: razon === 'combustible',
       tickets: ticketsAfectados.map(t => ({
         ticketId: t._id,
@@ -654,14 +654,14 @@ export const cancelAircraftForDay = async (
     }
 
     const aircraftId = flight.aircraftId;
-    const tandaActual = flight.numero_tanda;
+    const circuitoActual = flight.numero_circuito;
 
     // Buscar todos los vuelos del mismo avión en tandas futuras (mismo día o posteriores)
     const futureFlights = await Flight.find({
       aircraftId,
-      numero_tanda: { $gte: tandaActual },
+      numero_circuito: { $gte: circuitoActual },
       estado: 'abierto',
-    }).sort({ numero_tanda: 1 });
+    }).sort({ numero_circuito: 1 });
 
     if (futureFlights.length === 0) {
       res.status(404).json({ error: 'No hay vuelos futuros para cancelar' });
@@ -692,7 +692,7 @@ export const cancelAircraftForDay = async (
           mensaje: `El avión ${(aircraftId as any).matricula} ha sido cancelado para el resto del día. Tu ticket ha sido liberado y puedes inscribirte en otro vuelo.`,
           metadata: {
             ticketId: ticket._id.toString(),
-            tanda_cancelada: futFlight.numero_tanda,
+            circuito_cancelado: futFlight.numero_circuito,
             avion: (aircraftId as any).matricula,
           },
         });
@@ -765,7 +765,7 @@ export const deleteFlight = async (
       entityId: id,
       userId: req.user?.userId,
       payload: {
-        numero_tanda: flight.numero_tanda,
+        numero_circuito: flight.numero_circuito,
         aircraftId: flight.aircraftId,
       },
     });
@@ -777,5 +777,255 @@ export const deleteFlight = async (
   } catch (error: any) {
     logger.error('Error en deleteFlight:', error);
     res.status(500).json({ error: 'Error al eliminar vuelo' });
+  }
+};
+
+// ========== RESERVATION SYSTEM ==========
+
+// Get all available flights (PUBLIC - no authentication required)
+export const getAvailableFlights = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const flights = await Flight.find({
+      estado: 'abierto',
+      $expr: { $lt: ['$asientos_ocupados', '$capacidad_total'] }
+    })
+      .populate('aircraftId', 'matricula modelo capacidad')
+      .sort({ fecha_hora: 1 })
+      .lean();
+
+    const flightsWithAvailability = flights.map(flight => ({
+      ...flight,
+      asientos_disponibles: flight.capacidad_total - flight.asientos_ocupados,
+    }));
+
+    res.json(flightsWithAvailability);
+  } catch (error: any) {
+    logger.error('Error en getAvailableFlights:', error);
+    res.status(500).json({ error: 'Error al obtener vuelos disponibles' });
+  }
+};
+
+// Create a temporary 5-minute reservation (PUBLIC - no authentication required)
+export const createReservation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { flightId, cantidadPasajeros } = req.body;
+
+    if (!flightId || !cantidadPasajeros || cantidadPasajeros < 1) {
+      res.status(400).json({ error: 'flightId y cantidadPasajeros son requeridos' });
+      return;
+    }
+
+    // Find flight and check availability
+    const flight = await Flight.findById(flightId);
+    if (!flight) {
+      res.status(404).json({ error: 'Vuelo no encontrado' });
+      return;
+    }
+
+    if (flight.estado !== 'abierto') {
+      res.status(400).json({ error: 'El vuelo no está disponible para reservas' });
+      return;
+    }
+
+    const asientosDisponibles = flight.capacidad_total - flight.asientos_ocupados;
+    if (asientosDisponibles < cantidadPasajeros) {
+      res.status(400).json({
+        error: `Solo hay ${asientosDisponibles} asientos disponibles`
+      });
+      return;
+    }
+
+    // Create reservation with 5-minute expiration
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+    const reservation = await Reservation.create({
+      flightId,
+      cantidadPasajeros,
+      status: 'active',
+      expiresAt,
+    });
+
+    // Temporarily increment asientos_ocupados (soft lock)
+    flight.asientos_ocupados += cantidadPasajeros;
+    await flight.save();
+
+    logger.info(`Reserva creada: ${reservation._id} - Vuelo: ${flightId} - ${cantidadPasajeros} asientos - Expira: ${expiresAt}`);
+
+    // Emit socket event for real-time updates
+    const io = getIO();
+    io.emit('flightUpdated', {
+      flightId: flight._id,
+      asientos_ocupados: flight.asientos_ocupados,
+      asientos_disponibles: flight.capacidad_total - flight.asientos_ocupados,
+    });
+
+    res.status(201).json({
+      message: 'Reserva creada exitosamente',
+      reservation: {
+        id: reservation._id,
+        flightId: reservation.flightId,
+        cantidadPasajeros: reservation.cantidadPasajeros,
+        expiresAt: reservation.expiresAt,
+        status: reservation.status,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error en createReservation:', error);
+    res.status(500).json({ error: 'Error al crear reserva' });
+  }
+};
+
+// Get reservation by ID (PUBLIC - no authentication required)
+export const getReservation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const reservation = await Reservation.findById(id).populate('flightId', 'numero_circuito fecha_hora capacidad_total asientos_ocupados');
+
+    if (!reservation) {
+      res.status(404).json({ error: 'Reserva no encontrada' });
+      return;
+    }
+
+    // Check if reservation has expired
+    const now = new Date();
+    if (reservation.status === 'active' && reservation.expiresAt < now) {
+      reservation.status = 'expired';
+      await reservation.save();
+
+      // Decrement flight asientos_ocupados
+      const flight = await Flight.findById(reservation.flightId);
+      if (flight) {
+        flight.asientos_ocupados = Math.max(0, flight.asientos_ocupados - reservation.cantidadPasajeros);
+        await flight.save();
+
+        // Emit socket event
+        const io = getIO();
+        io.emit('flightUpdated', {
+          flightId: flight._id,
+          asientos_ocupados: flight.asientos_ocupados,
+          asientos_disponibles: flight.capacidad_total - flight.asientos_ocupados,
+        });
+      }
+
+      logger.info(`Reserva expirada: ${reservation._id}`);
+    }
+
+    res.json({
+      reservation: {
+        id: reservation._id,
+        flightId: reservation.flightId,
+        cantidadPasajeros: reservation.cantidadPasajeros,
+        expiresAt: reservation.expiresAt,
+        status: reservation.status,
+        createdAt: reservation.createdAt,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error en getReservation:', error);
+    res.status(500).json({ error: 'Error al obtener reserva' });
+  }
+};
+
+// Release/cancel a reservation (PUBLIC - no authentication required)
+export const releaseReservation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { reservationId } = req.body;
+
+    if (!reservationId) {
+      res.status(400).json({ error: 'reservationId es requerido' });
+      return;
+    }
+
+    const reservation = await Reservation.findById(reservationId);
+
+    if (!reservation) {
+      res.status(404).json({ error: 'Reserva no encontrada' });
+      return;
+    }
+
+    if (reservation.status !== 'active') {
+      res.status(400).json({ error: 'Solo se pueden cancelar reservas activas' });
+      return;
+    }
+
+    // Mark reservation as cancelled
+    reservation.status = 'cancelled';
+    await reservation.save();
+
+    // Decrement flight asientos_ocupados
+    const flight = await Flight.findById(reservation.flightId);
+    if (flight) {
+      flight.asientos_ocupados = Math.max(0, flight.asientos_ocupados - reservation.cantidadPasajeros);
+      await flight.save();
+
+      // Emit socket event
+      const io = getIO();
+      io.emit('flightUpdated', {
+        flightId: flight._id,
+        asientos_ocupados: flight.asientos_ocupados,
+        asientos_disponibles: flight.capacidad_total - flight.asientos_ocupados,
+      });
+
+      logger.info(`Reserva cancelada: ${reservation._id} - ${reservation.cantidadPasajeros} asientos liberados`);
+    }
+
+    res.json({
+      message: 'Reserva cancelada exitosamente',
+      reservation: {
+        id: reservation._id,
+        status: reservation.status,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error en releaseReservation:', error);
+    res.status(500).json({ error: 'Error al cancelar reserva' });
+  }
+};
+
+// Background cleanup job - expires old reservations
+export const cleanupExpiredReservations = async (): Promise<void> => {
+  try {
+    const now = new Date();
+
+    // Find all active reservations that have expired
+    const expiredReservations = await Reservation.find({
+      status: 'active',
+      expiresAt: { $lt: now },
+    });
+
+    if (expiredReservations.length === 0) {
+      return;
+    }
+
+    logger.info(`Limpiando ${expiredReservations.length} reservas expiradas...`);
+
+    for (const reservation of expiredReservations) {
+      // Mark as expired
+      reservation.status = 'expired';
+      await reservation.save();
+
+      // Decrement flight asientos_ocupados
+      const flight = await Flight.findById(reservation.flightId);
+      if (flight) {
+        flight.asientos_ocupados = Math.max(0, flight.asientos_ocupados - reservation.cantidadPasajeros);
+        await flight.save();
+
+        // Emit socket event
+        const io = getIO();
+        io.emit('flightUpdated', {
+          flightId: flight._id,
+          asientos_ocupados: flight.asientos_ocupados,
+          asientos_disponibles: flight.capacidad_total - flight.asientos_ocupados,
+        });
+      }
+
+      logger.info(`Reserva expirada automáticamente: ${reservation._id}`);
+    }
+
+    logger.info(`✓ ${expiredReservations.length} reservas expiradas procesadas`);
+  } catch (error: any) {
+    logger.error('Error en cleanupExpiredReservations:', error);
   }
 };

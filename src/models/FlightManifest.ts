@@ -9,7 +9,7 @@ export interface IManifestPasajero {
 
 export interface IFlightManifest extends Document {
   flightId: Types.ObjectId;
-  numero_tanda: number;
+  numero_circuito: number; // Previously: numero_tanda
   pasajeros: IManifestPasajero[];
   fecha_vuelo: Date;
   hora_despegue: Date;
@@ -28,7 +28,7 @@ const flightManifestSchema = new Schema<IFlightManifest>(
       required: true,
       unique: true,
     },
-    numero_tanda: {
+    numero_circuito: {
       type: Number,
       required: true,
     },

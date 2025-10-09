@@ -11,3 +11,4 @@ export { Refueling, IRefueling } from './Refueling';
 export { PushSubscription, IPushSubscription } from './PushSubscription';
 export { Settings, ISettings } from './Settings';
 export { Transaction, ITransaction, IPasajeroCompra } from './Transaction';
+export { Reservation, IReservation } from './Reservation';

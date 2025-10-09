@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const checkTandas = async () => {
+const checkCircuitos = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI as string);
     console.log('Conectado a MongoDB');
@@ -16,45 +16,45 @@ const checkTandas = async () => {
       console.log(`${a.matricula} (ID: ${a._id})`);
     });
 
-    // Obtener todos los vuelos agrupados por tanda
-    const flights = await Flight.find().populate('aircraftId').sort({ numero_tanda: 1, 'aircraftId.matricula': 1 });
+    // Obtener todos los vuelos agrupados por circuito
+    const flights = await Flight.find().populate('aircraftId').sort({ numero_circuito: 1, 'aircraftId.matricula': 1 });
 
-    const tandasMap: any = {};
+    const circuitosMap: any = {};
     flights.forEach(f => {
-      if (!tandasMap[f.numero_tanda]) {
-        tandasMap[f.numero_tanda] = [];
+      if (!circuitosMap[f.numero_circuito]) {
+        circuitosMap[f.numero_circuito] = [];
       }
-      tandasMap[f.numero_tanda].push({
+      circuitosMap[f.numero_circuito].push({
         matricula: (f.aircraftId as any)?.matricula,
         aircraftId: f.aircraftId,
         estado: f.estado,
       });
     });
 
-    console.log('\n=== TANDAS ===');
-    Object.keys(tandasMap).sort((a, b) => Number(a) - Number(b)).forEach(tanda => {
-      console.log(`\nTanda ${tanda}:`);
-      tandasMap[tanda].forEach((v: any) => {
+    console.log('\n=== CIRCUITOS ===');
+    Object.keys(circuitosMap).sort((a, b) => Number(a) - Number(b)).forEach(circuito => {
+      console.log(`\nCircuito ${circuito}:`);
+      circuitosMap[circuito].forEach((v: any) => {
         console.log(`  - ${v.matricula} (${v.aircraftId}) [${v.estado}]`);
       });
     });
 
-    // Verificar específicamente tanda 2
-    console.log('\n=== VERIFICACIÓN TANDA 2 ===');
-    const tanda2Flights = await Flight.find({ numero_tanda: 2 }).populate('aircraftId');
-    console.log(`Vuelos en tanda 2: ${tanda2Flights.length}`);
-    tanda2Flights.forEach(f => {
+    // Verificar específicamente circuito 2
+    console.log('\n=== VERIFICACIÓN CIRCUITO 2 ===');
+    const circuito2Flights = await Flight.find({ numero_circuito: 2 }).populate('aircraftId');
+    console.log(`Vuelos en circuito 2: ${circuito2Flights.length}`);
+    circuito2Flights.forEach(f => {
       console.log(`  - ${(f.aircraftId as any)?.matricula} (ID: ${f.aircraftId})`);
     });
 
-    // Buscar si CC-SKE está en alguna tanda
+    // Buscar si CC-SKE está en alguna circuito
     const skePlane = aircrafts.find(a => a.matricula === 'CC-SKE');
     if (skePlane) {
       console.log(`\n=== CC-SKE (${skePlane._id}) ===`);
-      const skeFlights = await Flight.find({ aircraftId: skePlane._id }).sort({ numero_tanda: 1 });
+      const skeFlights = await Flight.find({ aircraftId: skePlane._id }).sort({ numero_circuito: 1 });
       console.log(`Vuelos de CC-SKE: ${skeFlights.length}`);
       skeFlights.forEach(f => {
-        console.log(`  - Tanda ${f.numero_tanda} [${f.estado}]`);
+        console.log(`  - Circuito ${f.numero_circuito} [${f.estado}]`);
       });
     }
 
@@ -65,4 +65,4 @@ const checkTandas = async () => {
   }
 };
 
-checkTandas();
+checkCircuitos();

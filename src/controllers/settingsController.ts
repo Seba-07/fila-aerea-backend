@@ -13,8 +13,8 @@ export const getPrecioTicket = async (req: Request, res: Response): Promise<void
     // Si no existe, crear configuración por defecto
     if (!settings) {
       settings = await Settings.create({
-        duracion_tanda_minutos: 20,
-        max_tandas_sin_reabastecimiento_default: 4,
+        duracion_circuito_minutos: 20,
+        max_circuitos_sin_reabastecimiento_default: 4,
         precio_ticket: 15000,
       });
     }
@@ -34,8 +34,8 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
     // Si no existe, crear configuración por defecto
     if (!settings) {
       settings = await Settings.create({
-        duracion_tanda_minutos: 20,
-        max_tandas_sin_reabastecimiento_default: 4,
+        duracion_circuito_minutos: 20,
+        max_circuitos_sin_reabastecimiento_default: 4,
         precio_ticket: 15000,
       });
     }
@@ -50,24 +50,24 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
 // Actualizar configuración global
 export const updateSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { duracion_tanda_minutos, max_tandas_sin_reabastecimiento_default, hora_inicio_primera_tanda, precio_ticket } = req.body;
+    const { duracion_circuito_minutos, max_circuitos_sin_reabastecimiento_default, hora_inicio_primer_circuito, precio_ticket } = req.body;
 
     let settings = await Settings.findOne();
 
     if (!settings) {
       settings = await Settings.create(req.body);
     } else {
-      if (duracion_tanda_minutos !== undefined) settings.duracion_tanda_minutos = duracion_tanda_minutos;
-      if (max_tandas_sin_reabastecimiento_default !== undefined)
-        settings.max_tandas_sin_reabastecimiento_default = max_tandas_sin_reabastecimiento_default;
-      if (hora_inicio_primera_tanda !== undefined) settings.hora_inicio_primera_tanda = hora_inicio_primera_tanda;
+      if (duracion_circuito_minutos !== undefined) settings.duracion_circuito_minutos = duracion_circuito_minutos;
+      if (max_circuitos_sin_reabastecimiento_default !== undefined)
+        settings.max_circuitos_sin_reabastecimiento_default = max_circuitos_sin_reabastecimiento_default;
+      if (hora_inicio_primer_circuito !== undefined) settings.hora_inicio_primer_circuito = hora_inicio_primer_circuito;
       if (precio_ticket !== undefined) settings.precio_ticket = precio_ticket;
 
       await settings.save();
     }
 
     // Si se actualizó la hora de inicio, recalcular todas las horas previstas
-    if (hora_inicio_primera_tanda) {
+    if (hora_inicio_primer_circuito) {
       await recalcularTodasLasHorasPrevistas();
     }
 
@@ -82,19 +82,19 @@ export const updateSettings = async (req: AuthRequest, res: Response): Promise<v
 const recalcularTodasLasHorasPrevistas = async () => {
   try {
     const settings = await Settings.findOne();
-    if (!settings || !settings.hora_inicio_primera_tanda) {
+    if (!settings || !settings.hora_inicio_primer_circuito) {
       logger.warn('No hay hora de inicio configurada, no se pueden calcular horas previstas');
       return;
     }
 
-    const duracionTanda = settings.duracion_tanda_minutos;
+    const duracionCircuito = settings.duracion_circuito_minutos;
 
     // Obtener todos los vuelos ordenados por tanda
     const flights = await Flight.find({ estado: { $in: ['abierto', 'en_vuelo'] } })
-      .sort({ numero_tanda: 1 })
+      .sort({ numero_circuito: 1 })
       .populate('aircraftId');
 
-    let horaActual = new Date(settings.hora_inicio_primera_tanda);
+    let horaActual = new Date(settings.hora_inicio_primer_circuito);
 
     for (const flight of flights) {
       const horaAnterior = flight.hora_prevista_salida ? new Date(flight.hora_prevista_salida) : null;
@@ -108,7 +108,7 @@ const recalcularTodasLasHorasPrevistas = async () => {
       }
 
       // Incrementar hora para la siguiente tanda
-      horaActual = new Date(horaActual.getTime() + duracionTanda * 60 * 1000);
+      horaActual = new Date(horaActual.getTime() + duracionCircuito * 60 * 1000);
     }
 
     logger.info(`Recalculadas ${flights.length} horas previstas de vuelo`);
@@ -146,10 +146,10 @@ const notificarCambioHora = async (flight: any, horaAnterior: Date, horaNueva: D
         userId: ticket.userId,
         tipo: 'cambio_hora',
         titulo: 'Cambio de Hora de Vuelo',
-        mensaje: `Tu vuelo de la tanda ${flight.numero_tanda} cambió su hora de salida de ${horaAnteriorStr} a ${horaNuevaStr}. Por favor acepta o rechaza el cambio.`,
+        mensaje: `Tu vuelo de la circuito${flight.numero_circuito} cambió su hora de salida de ${horaAnteriorStr} a ${horaNuevaStr}. Por favor acepta o rechaza el cambio.`,
         metadata: {
           ticketId: ticket._id.toString(),
-          numero_tanda: flight.numero_tanda,
+          numero_circuito: flight.numero_circuito,
           hora_anterior: horaAnterior,
           hora_nueva: horaNueva,
         },
@@ -159,10 +159,10 @@ const notificarCambioHora = async (flight: any, horaAnterior: Date, horaNueva: D
       await sendPushNotification(
         ticket.userId.toString(),
         '⏰ Cambio de Hora de Vuelo',
-        `Tanda ${flight.numero_tanda}: ${horaAnteriorStr} → ${horaNuevaStr}. Acepta o rechaza el cambio.`,
+        `Circuito ${flight.numero_circuito}: ${horaAnteriorStr} → ${horaNuevaStr}. Acepta o rechaza el cambio.`,
         {
           ticketId: ticket._id.toString(),
-          numero_tanda: flight.numero_tanda,
+          numero_circuito: flight.numero_circuito,
           tipo: 'cambio_hora',
         }
       );
@@ -171,14 +171,14 @@ const notificarCambioHora = async (flight: any, horaAnterior: Date, horaNueva: D
       const io = getIO();
       io.to(`user:${ticket.userId.toString()}`).emit('timeChanged', {
         ticketId: ticket._id.toString(),
-        numero_tanda: flight.numero_tanda,
+        numero_circuito: flight.numero_circuito,
         hora_anterior: horaAnteriorStr,
         hora_nueva: horaNuevaStr,
         cambio_hora_pendiente: ticket.cambio_hora_pendiente,
       });
     }
 
-    logger.info(`Notificados ${tickets.length} pasajeros sobre cambio de hora en tanda ${flight.numero_tanda}`);
+    logger.info(`Notificados ${tickets.length} pasajeros sobre cambio de hora en circuito${flight.numero_circuito}`);
   } catch (error) {
     logger.error('Error notificando cambio de hora:', error);
   }
@@ -215,24 +215,24 @@ export const updateHoraPrevista = async (req: AuthRequest, res: Response): Promi
   }
 };
 
-// Actualizar hora prevista de toda una tanda con efecto cascada
-export const updateHoraPrevistaTanda = async (req: AuthRequest, res: Response): Promise<void> => {
+// Actualizar hora prevista de toda una circuitocon efecto cascada
+export const updateHoraPrevistaCircuito = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { numeroTanda } = req.params;
+    const { numeroCircuito } = req.params;
     const { nueva_hora } = req.body; // Formato "HH:MM"
 
-    const tandaNum = parseInt(numeroTanda);
+    const circuitoNum = parseInt(numeroCircuito);
 
     // Obtener todos los vuelos de esta tanda
-    const vuelosTanda = await Flight.find({ numero_tanda: tandaNum });
+    const vuelosCircuito = await Flight.find({ numero_circuito: circuitoNum });
 
-    if (vuelosTanda.length === 0) {
-      res.status(404).json({ error: 'Tanda no encontrada' });
+    if (vuelosCircuito.length === 0) {
+      res.status(404).json({ error: 'Circuito no encontrado' });
       return;
     }
 
     // Crear fecha completa con la nueva hora usando UTC
-    const fechaBase = new Date(vuelosTanda[0].fecha_hora);
+    const fechaBase = new Date(vuelosCircuito[0].fecha_hora);
     const [horas, minutos] = nueva_hora.split(':');
 
     // Crear la fecha usando UTC para guardar 15:00 como 15:00 UTC en la BD
@@ -246,8 +246,8 @@ export const updateHoraPrevistaTanda = async (req: AuthRequest, res: Response): 
       0
     ));
 
-    // Actualizar todos los vuelos de la tanda
-    for (const vuelo of vuelosTanda) {
+    // Actualizar todos los vuelos de el circuito
+    for (const vuelo of vuelosCircuito) {
       const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
       vuelo.hora_prevista_salida = new Date(primeraFecha);
       await vuelo.save();
@@ -259,48 +259,48 @@ export const updateHoraPrevistaTanda = async (req: AuthRequest, res: Response): 
     }
 
     // Recalcular las tandas siguientes
-    await recalcularTandasSiguientes(tandaNum, primeraFecha);
+    await recalcularCircuitosSiguientes(circuitoNum, primeraFecha);
 
-    logger.info(`Actualizada hora prevista de tanda ${tandaNum} a ${nueva_hora} y recalculadas tandas siguientes`);
+    logger.info(`Actualizada hora prevista de circuito${circuitoNum} a ${nueva_hora} y recalculadas tandas siguientes`);
 
     res.json({
       message: 'Hora prevista actualizada con efecto cascada',
-      vuelos_actualizados: vuelosTanda.length
+      vuelos_actualizados: vuelosCircuito.length
     });
   } catch (error: any) {
-    logger.error('Error en updateHoraPrevistaTanda:', error);
-    res.status(500).json({ error: 'Error al actualizar hora prevista de tanda' });
+    logger.error('Error en updateHoraPrevistaCircuito:', error);
+    res.status(500).json({ error: 'Error al actualizar hora prevista de circuito' });
   }
 };
 
 // Recalcular tandas siguientes después de cambio de hora en una tanda
-const recalcularTandasSiguientes = async (tandaActual: number, nuevaHora: Date) => {
+const recalcularCircuitosSiguientes = async (circuitoActual: number, nuevaHora: Date) => {
   try {
     const settings = await Settings.findOne();
     if (!settings) return;
 
-    const duracionTanda = settings.duracion_tanda_minutos;
+    const duracionCircuito = settings.duracion_circuito_minutos;
 
     // Obtener todas las tandas siguientes (agrupadas)
     const vuelosSiguientes = await Flight.find({
-      numero_tanda: { $gt: tandaActual },
+      numero_circuito: { $gt: circuitoActual },
       estado: { $in: ['abierto', 'en_vuelo'] },
-    }).sort({ numero_tanda: 1 });
+    }).sort({ numero_circuito: 1 });
 
     if (vuelosSiguientes.length === 0) return;
 
     // Calcular hora incrementalmente para cada tanda
-    let tandaAnterior = tandaActual;
+    let circuitoAnterior = circuitoActual;
     let horaActual = new Date(nuevaHora);
 
     for (const vuelo of vuelosSiguientes) {
-      // Si cambiamos de tanda, incrementar la hora
-      if (vuelo.numero_tanda !== tandaAnterior) {
+      // Si cambiamos de circuito, incrementar la hora
+      if (vuelo.numero_circuito !== circuitoAnterior) {
         // Calcular cuántas tandas avanzamos
-        const saltoTandas = vuelo.numero_tanda - tandaAnterior;
+        const saltoCircuitos = vuelo.numero_circuito - circuitoAnterior;
         // Sumar la duración por cada tanda
-        horaActual = new Date(horaActual.getTime() + (duracionTanda * saltoTandas * 60 * 1000));
-        tandaAnterior = vuelo.numero_tanda;
+        horaActual = new Date(horaActual.getTime() + (duracionCircuito * saltoCircuitos * 60 * 1000));
+        circuitoAnterior = vuelo.numero_circuito;
       }
 
       const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
@@ -313,7 +313,7 @@ const recalcularTandasSiguientes = async (tandaActual: number, nuevaHora: Date) 
       }
     }
 
-    logger.info(`Recalculadas ${vuelosSiguientes.length} horas de vuelos siguientes a tanda ${tandaActual}`);
+    logger.info(`Recalculadas ${vuelosSiguientes.length} horas de vuelos siguientes a circuito${circuitoActual}`);
   } catch (error) {
     logger.error('Error recalculando tandas siguientes:', error);
   }
@@ -348,10 +348,10 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
     flight.hora_inicio_vuelo = horaInicio;
     await flight.save();
 
-    // Generar manifiesto para toda la tanda (solo una vez por tanda)
-    await generarManifiestoTanda(flight.numero_tanda, req.user!.userId);
+    // Generar manifiesto para toda la circuito(solo una vez por tanda)
+    await generarManifiestoCircuito(flight.numero_circuito, req.user!.userId);
 
-    logger.info(`Vuelo ${flightId} iniciado (tanda ${flight.numero_tanda})`);
+    logger.info(`Vuelo ${flightId} iniciado (tanda ${flight.numero_circuito})`);
 
     res.json({ message: 'Vuelo iniciado y manifiesto generado', flight });
   } catch (error: any) {
@@ -360,28 +360,28 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
-// Generar manifiesto para una tanda completa
-const generarManifiestoTanda = async (numeroTanda: number, userId: string) => {
+// Generar manifiesto para una circuitocompleta
+const generarManifiestoCircuito = async (numeroCircuito: number, userId: string) => {
   try {
     const { FlightManifest, Ticket } = await import('../models');
 
     // Verificar si ya existe un manifiesto para esta tanda
-    const existente = await FlightManifest.findOne({ numero_tanda: numeroTanda });
+    const existente = await FlightManifest.findOne({ numero_circuito: numeroCircuito });
     if (existente) {
-      logger.info(`Manifiesto ya existe para tanda ${numeroTanda}`);
+      logger.info(`Manifiesto ya existe para circuito${numeroCircuito}`);
       return;
     }
 
-    // Obtener todos los vuelos de la tanda
-    const vuelosTanda = await Flight.find({ numero_tanda: numeroTanda })
+    // Obtener todos los vuelos de el circuito
+    const vuelosCircuito = await Flight.find({ numero_circuito: numeroCircuito })
       .populate('aircraftId')
       .sort({ 'aircraftId.matricula': 1 });
 
-    if (vuelosTanda.length === 0) return;
+    if (vuelosCircuito.length === 0) return;
 
     // Para cada vuelo, obtener los pasajeros inscritos
     const manifiestosPorVuelo = [];
-    for (const vuelo of vuelosTanda) {
+    for (const vuelo of vuelosCircuito) {
       // Buscar tickets inscritos o asignados a este vuelo
       const tickets = await Ticket.find({
         flightId: vuelo._id,
@@ -409,20 +409,20 @@ const generarManifiestoTanda = async (numeroTanda: number, userId: string) => {
       });
     }
 
-    // Crear un manifiesto para el primer vuelo de la tanda (representando toda la tanda)
-    const primerVuelo = vuelosTanda[0];
+    // Crear un manifiesto para el primer vuelo de la circuito(representando toda el circuito)
+    const primerVuelo = vuelosCircuito[0];
     const todosLosPasajeros = manifiestosPorVuelo.flatMap(m => m.pasajeros);
 
     await FlightManifest.create({
       flightId: primerVuelo._id,
-      numero_tanda: numeroTanda,
+      numero_circuito: numeroCircuito,
       pasajeros: todosLosPasajeros,
       fecha_vuelo: primerVuelo.fecha_hora,
       hora_despegue: primerVuelo.hora_inicio_vuelo || new Date(),
       createdBy: userId,
     });
 
-    logger.info(`✅ Manifiesto creado para tanda ${numeroTanda} con ${todosLosPasajeros.length} pasajeros total`);
+    logger.info(`✅ Manifiesto creado para circuito${numeroCircuito} con ${todosLosPasajeros.length} pasajeros total`);
   } catch (error) {
     logger.error('Error generando manifiesto:', error);
   }
@@ -461,25 +461,25 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
     await flight.save();
 
     // Actualizar hora de aterrizaje en el manifiesto
-    await actualizarHoraAterrizajeManifiesto(flight.numero_tanda, horaAterrizaje);
+    await actualizarHoraAterrizajeManifiesto(flight.numero_circuito, horaAterrizaje);
 
-    logger.info(`✈️ Vuelo ${(flight.aircraftId as any)?.matricula} finalizado (tanda ${flight.numero_tanda})`);
+    logger.info(`✈️ Vuelo ${(flight.aircraftId as any)?.matricula} finalizado (tanda ${flight.numero_circuito})`);
 
-    // Verificar si este es el último vuelo de la tanda en finalizar
-    const vuelosPendientesTanda = await Flight.find({
-      numero_tanda: flight.numero_tanda,
+    // Verificar si este es el último vuelo de la circuitoen finalizar
+    const vuelosPendientesCircuito = await Flight.find({
+      numero_circuito: flight.numero_circuito,
       estado: { $in: ['abierto', 'en_vuelo'] },
     });
 
-    if (vuelosPendientesTanda.length === 0) {
-      // Este fue el último vuelo de la tanda, recalcular horas siguientes
-      logger.info(`🏁 Último vuelo de tanda ${flight.numero_tanda} finalizado a las ${horaAterrizaje.toISOString()}`);
+    if (vuelosPendientesCircuito.length === 0) {
+      // Este fue el último vuelo de el circuito, recalcular horas siguientes
+      logger.info(`🏁 Último vuelo de circuito${flight.numero_circuito} finalizado a las ${horaAterrizaje.toISOString()}`);
       logger.info(`   Hora UTC: ${horaAterrizaje.toUTCString()}`);
       logger.info(`   Hora local: ${horaAterrizaje.toLocaleString('es-CL')}`);
       logger.info(`   Recalculando horas siguientes...`);
-      await recalcularHorasSiguientes(flight.numero_tanda, horaAterrizaje);
+      await recalcularHorasSiguientes(flight.numero_circuito, horaAterrizaje);
     } else {
-      logger.info(`⏳ Tanda ${flight.numero_tanda} aún tiene ${vuelosPendientesTanda.length} vuelo(s) pendiente(s)`);
+      logger.info(`⏳ Circuito ${flight.numero_circuito} aún tiene ${vuelosPendientesCircuito.length} vuelo(s) pendiente(s)`);
     }
 
     res.json({ message: 'Vuelo finalizado y manifiesto actualizado', flight });
@@ -489,16 +489,16 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
-// Actualizar hora de aterrizaje en el manifiesto de la tanda
-const actualizarHoraAterrizajeManifiesto = async (numeroTanda: number, horaAterrizaje: Date) => {
+// Actualizar hora de aterrizaje en el manifiesto de el circuito
+const actualizarHoraAterrizajeManifiesto = async (numeroCircuito: number, horaAterrizaje: Date) => {
   try {
     const { FlightManifest } = await import('../models');
 
-    const manifiesto = await FlightManifest.findOne({ numero_tanda: numeroTanda });
+    const manifiesto = await FlightManifest.findOne({ numero_circuito: numeroCircuito });
     if (manifiesto) {
       manifiesto.hora_aterrizaje = horaAterrizaje;
       await manifiesto.save();
-      logger.info(`Actualizada hora de aterrizaje en manifiesto de tanda ${numeroTanda}`);
+      logger.info(`Actualizada hora de aterrizaje en manifiesto de circuito${numeroCircuito}`);
     }
   } catch (error) {
     logger.error('Error actualizando hora de aterrizaje en manifiesto:', error);
@@ -506,19 +506,19 @@ const actualizarHoraAterrizajeManifiesto = async (numeroTanda: number, horaAterr
 };
 
 // Recalcular horas de vuelos siguientes después de un arribo
-const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) => {
+const recalcularHorasSiguientes = async (circuitoActual: number, horaArribo: Date) => {
   try {
     const settings = await Settings.findOne();
     if (!settings) return;
 
-    const duracionTanda = settings.duracion_tanda_minutos;
+    const duracionCircuito = settings.duracion_circuito_minutos;
 
     // Obtener vuelos siguientes (tandas mayores) que aún no han volado
     const vuelosSiguientes = await Flight.find({
-      numero_tanda: { $gt: tandaActual },
+      numero_circuito: { $gt: circuitoActual },
       estado: { $in: ['abierto'] },
     })
-      .sort({ numero_tanda: 1 })
+      .sort({ numero_circuito: 1 })
       .populate('aircraftId');
 
     if (vuelosSiguientes.length === 0) {
@@ -526,46 +526,46 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       return;
     }
 
-    // Agrupar vuelos por tanda para calcular hora una sola vez por tanda
-    const vuelosPorTanda: { [key: number]: any[] } = {};
+    // Agrupar vuelos por circuitopara calcular hora una sola vez por tanda
+    const vuelosPorCircuito: { [key: number]: any[] } = {};
     for (const vuelo of vuelosSiguientes) {
-      if (!vuelosPorTanda[vuelo.numero_tanda]) {
-        vuelosPorTanda[vuelo.numero_tanda] = [];
+      if (!vuelosPorCircuito[vuelo.numero_circuito]) {
+        vuelosPorCircuito[vuelo.numero_circuito] = [];
       }
-      vuelosPorTanda[vuelo.numero_tanda].push(vuelo);
+      vuelosPorCircuito[vuelo.numero_circuito].push(vuelo);
     }
 
-    const numerosTanda = Object.keys(vuelosPorTanda).map(Number).sort((a, b) => a - b);
+    const numerosCircuito = Object.keys(vuelosPorCircuito).map(Number).sort((a, b) => a - b);
 
-    for (const numeroTanda of numerosTanda) {
+    for (const numeroCircuito of numerosCircuito) {
       // Calcular hora para esta tanda
-      const saltoTandas = numeroTanda - tandaActual;
+      const saltoCircuitos = numeroCircuito - circuitoActual;
 
-      logger.info(`📊 Calculando hora para tanda ${numeroTanda}:`);
-      logger.info(`   Tanda actual: ${tandaActual}, Salto: ${saltoTandas} tanda(s)`);
+      logger.info(`📊 Calculando hora para circuito${numeroCircuito}:`);
+      logger.info(`   Circuito actual: ${circuitoActual}, Salto: ${saltoCircuitos} tanda(s)`);
       logger.info(`   Hora aterrizaje recibida: ${horaArribo.toISOString()}`);
 
       let horaNueva: Date;
-      if (saltoTandas === 1) {
-        // La tanda inmediatamente siguiente sale a la hora de aterrizaje
+      if (saltoCircuitos === 1) {
+        // La circuitoinmediatamente siguiente sale a la hora de aterrizaje
         horaNueva = new Date(horaArribo);
-        logger.info(`   ✓ Tanda siguiente inmediata → misma hora de aterrizaje`);
+        logger.info(`   ✓ Circuito siguiente inmediata → misma hora de aterrizaje`);
       } else {
-        // Tandas más adelante: agregar duración por cada tanda intermedia
-        const minutosAgregar = duracionTanda * (saltoTandas - 1);
+        // Circuitos más adelante: agregar duración por cada circuitointermedia
+        const minutosAgregar = duracionCircuito * (saltoCircuitos - 1);
         horaNueva = new Date(horaArribo.getTime() + (minutosAgregar * 60 * 1000));
-        logger.info(`   ✓ Tanda con salto → agregar ${minutosAgregar} minutos`);
+        logger.info(`   ✓ Circuito con salto → agregar ${minutosAgregar} minutos`);
       }
       logger.info(`   Hora nueva calculada: ${horaNueva.toISOString()}`);
 
       // Aplicar la misma hora a TODOS los vuelos de esta tanda
-      for (const vuelo of vuelosPorTanda[numeroTanda]) {
+      for (const vuelo of vuelosPorCircuito[numeroCircuito]) {
         const horaAnterior = vuelo.hora_prevista_salida ? new Date(vuelo.hora_prevista_salida) : null;
 
         vuelo.hora_prevista_salida = new Date(horaNueva);
         await vuelo.save();
 
-        logger.info(`✈️  ${(vuelo.aircraftId as any)?.matricula} (tanda ${vuelo.numero_tanda}) → ${horaNueva.toLocaleTimeString('es-CL')}`);
+        logger.info(`✈️  ${(vuelo.aircraftId as any)?.matricula} (tanda ${vuelo.numero_circuito}) → ${horaNueva.toLocaleTimeString('es-CL')}`);
 
         // Notificar si cambió la hora
         if (horaAnterior && horaAnterior.getTime() !== horaNueva.getTime()) {
@@ -574,7 +574,7 @@ const recalcularHorasSiguientes = async (tandaActual: number, horaArribo: Date) 
       }
     }
 
-    logger.info(`✅ Recalculadas ${vuelosSiguientes.length} horas de vuelo en ${numerosTanda.length} tanda(s) después de aterrizaje de tanda ${tandaActual}`);
+    logger.info(`✅ Recalculadas ${vuelosSiguientes.length} horas de vuelo en ${numerosCircuito.length} tanda(s) después de aterrizaje de circuito${circuitoActual}`);
   } catch (error) {
     logger.error('Error recalculando horas siguientes:', error);
   }

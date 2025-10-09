@@ -9,19 +9,19 @@ export const getManifests = async (req: AuthRequest, res: Response): Promise<voi
     const manifests = await FlightManifest.find()
       .populate('flightId')
       .populate('createdBy', 'nombre apellido email')
-      .sort({ numero_tanda: -1 });
+      .sort({ numero_circuito: -1 });
 
     // Enriquecer con informaci�n de los vuelos de cada tanda
     const manifestsConVuelos = await Promise.all(
       manifests.map(async (manifest) => {
-        // Obtener todos los vuelos de la tanda
-        const vuelosTanda = await Flight.find({ numero_tanda: manifest.numero_tanda })
+        // Obtener todos los vuelos de el circuito
+        const vuelosCircuito = await Flight.find({ numero_circuito: manifest.numero_circuito })
           .populate('aircraftId')
           .sort({ 'aircraftId.matricula': 1 });
 
         return {
           ...manifest.toObject(),
-          vuelos: vuelosTanda.map(v => ({
+          vuelos: vuelosCircuito.map(v => ({
             matricula: (v.aircraftId as any)?.matricula,
             modelo: (v.aircraftId as any)?.modelo,
             estado: v.estado,
@@ -38,11 +38,11 @@ export const getManifests = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 // Obtener un manifiesto espec�fico por tanda
-export const getManifestByTanda = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getManifestByCircuito = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { numeroTanda } = req.params;
+    const { numeroCircuito } = req.params;
 
-    const manifest = await FlightManifest.findOne({ numero_tanda: parseInt(numeroTanda) })
+    const manifest = await FlightManifest.findOne({ numero_circuito: parseInt(numeroCircuito) })
       .populate('flightId')
       .populate('createdBy', 'nombre apellido email');
 
@@ -52,13 +52,13 @@ export const getManifestByTanda = async (req: AuthRequest, res: Response): Promi
     }
 
     // Obtener informaci�n detallada de los vuelos
-    const vuelosTanda = await Flight.find({ numero_tanda: parseInt(numeroTanda) })
+    const vuelosCircuito = await Flight.find({ numero_circuito: parseInt(numeroCircuito) })
       .populate('aircraftId')
       .sort({ 'aircraftId.matricula': 1 });
 
     // Organizar pasajeros por vuelo
     const vuelosConPasajeros = await Promise.all(
-      vuelosTanda.map(async (vuelo) => {
+      vuelosCircuito.map(async (vuelo) => {
         const { Ticket } = await import('../models');
 
         const tickets = await Ticket.find({
@@ -88,7 +88,7 @@ export const getManifestByTanda = async (req: AuthRequest, res: Response): Promi
       vuelos: vuelosConPasajeros,
     });
   } catch (error: any) {
-    logger.error('Error en getManifestByTanda:', error);
+    logger.error('Error en getManifestByCircuito:', error);
     res.status(500).json({ error: 'Error al obtener manifiesto' });
   }
 };

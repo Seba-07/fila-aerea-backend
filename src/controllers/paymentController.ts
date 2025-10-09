@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { webpayPlus, TRANSBANK_CONFIG } from '../config/transbank';
-import { Transaction, User, Ticket, Settings, Payment } from '../models';
+import { Transaction, User, Ticket, Settings, Payment, Reservation, Flight } from '../models';
 import { logger } from '../utils/logger';
 import bcrypt from 'bcryptjs';
 
@@ -13,6 +13,8 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
       telefono,
       cantidad_tickets,
       pasajeros, // Array de { nombre, apellido, rut, esMenor }
+      selectedFlightId, // Optional - flight to associate tickets with
+      reservationId, // Optional - reservation to confirm
     } = req.body;
 
     // Validaciones
@@ -26,12 +28,63 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    // If reservationId is provided, validate it
+    if (reservationId) {
+      const reservation = await Reservation.findById(reservationId);
+
+      if (!reservation) {
+        res.status(404).json({ error: 'Reserva no encontrada' });
+        return;
+      }
+
+      if (reservation.status !== 'active') {
+        res.status(400).json({ error: 'La reserva no está activa' });
+        return;
+      }
+
+      // Check if reservation has expired
+      const now = new Date();
+      if (reservation.expiresAt < now) {
+        res.status(400).json({ error: 'La reserva ha expirado' });
+        return;
+      }
+
+      // Validate cantidad_tickets matches reservation
+      if (reservation.cantidadPasajeros !== cantidad_tickets) {
+        res.status(400).json({
+          error: `La cantidad de tickets (${cantidad_tickets}) no coincide con la reserva (${reservation.cantidadPasajeros})`
+        });
+        return;
+      }
+
+      // If selectedFlightId is provided, it must match the reservation
+      if (selectedFlightId && selectedFlightId !== reservation.flightId.toString()) {
+        res.status(400).json({ error: 'El vuelo seleccionado no coincide con la reserva' });
+        return;
+      }
+    }
+
+    // If selectedFlightId is provided, validate the flight
+    if (selectedFlightId) {
+      const flight = await Flight.findById(selectedFlightId);
+
+      if (!flight) {
+        res.status(404).json({ error: 'Vuelo no encontrado' });
+        return;
+      }
+
+      if (flight.estado !== 'abierto') {
+        res.status(400).json({ error: 'El vuelo no está disponible' });
+        return;
+      }
+    }
+
     // Obtener precio del ticket desde configuración
     let settings = await Settings.findOne();
     if (!settings) {
       settings = await Settings.create({
-        duracion_tanda_minutos: 20,
-        max_tandas_sin_reabastecimiento_default: 4,
+        duracion_circuito_minutos: 20,
+        max_circuitos_sin_reabastecimiento_default: 4,
         precio_ticket: 15000,
       });
     }
@@ -76,9 +129,11 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
       token: response.token,
       session_id,
       estado: 'pendiente',
+      reservationId: reservationId || undefined,
+      selectedFlightId: selectedFlightId || undefined,
     });
 
-    logger.info(`Transacción iniciada: ${buy_order} - Monto: $${monto_total}`);
+    logger.info(`Transacción iniciada: ${buy_order} - Monto: $${monto_total}${reservationId ? ` - Reserva: ${reservationId}` : ''}${selectedFlightId ? ` - Vuelo: ${selectedFlightId}` : ''}`);
 
     // Retornar URL y token para redirigir a Webpay
     res.json({
@@ -167,6 +222,25 @@ export const confirmarPago = async (req: Request, res: Response): Promise<void> 
 
       transaction.userId = user._id as any;
 
+      // If there's a reservation, mark it as confirmed
+      if (transaction.reservationId) {
+        const reservation = await Reservation.findById(transaction.reservationId);
+        if (reservation && reservation.status === 'active') {
+          reservation.status = 'confirmed';
+          await reservation.save();
+          logger.info(`Reserva confirmada: ${reservation._id}`);
+        }
+      }
+
+      // Determine the flight to associate tickets with
+      let flightId = transaction.selectedFlightId;
+      if (!flightId && transaction.reservationId) {
+        const reservation = await Reservation.findById(transaction.reservationId);
+        if (reservation) {
+          flightId = reservation.flightId;
+        }
+      }
+
       // Crear tickets para cada pasajero
       const ticketIds = [];
       for (const pasajero of transaction.pasajeros) {
@@ -174,12 +248,25 @@ export const confirmarPago = async (req: Request, res: Response): Promise<void> 
           userId: user._id,
           codigo_ticket: `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
           pasajeros: [pasajero],
-          estado: 'disponible',
+          estado: flightId ? 'asignado' : 'disponible',
+          flightId: flightId || undefined,
         });
         ticketIds.push(ticket._id);
       }
 
       transaction.ticketIds = ticketIds as any;
+
+      // If tickets are associated with a flight, the asientos_ocupados should already be
+      // incremented by the reservation (soft lock is now permanent)
+      // If no reservation was used but a flight was selected, we need to increment
+      if (flightId && !transaction.reservationId) {
+        const flight = await Flight.findById(flightId);
+        if (flight) {
+          flight.asientos_ocupados += transaction.cantidad_tickets;
+          await flight.save();
+          logger.info(`Asientos actualizados en vuelo ${flightId}: +${transaction.cantidad_tickets}`);
+        }
+      }
 
       // Crear registro de pago en historial
       const tipoTarjeta = response.payment_type_code === 'VD' ? 'debito' :

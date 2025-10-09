@@ -211,7 +211,7 @@ export const rejectRescheduling = async (req: AuthRequest, res: Response): Promi
       metodo_pago: metodo_pago || 'efectivo',
       cantidad_tickets: 1,
       tipo: 'devolucion',
-      descripcion: `Devolución por rechazo de reprogramación - Tanda ${ticket.reprogramacion_pendiente.numero_tanda_anterior}`,
+      descripcion: `Devolución por rechazo de reprogramación - Circuito ${ticket.reprogramacion_pendiente.numero_circuito_anterior}`,
     });
 
     // Cancelar ticket
@@ -232,12 +232,12 @@ export const rejectRescheduling = async (req: AuthRequest, res: Response): Promi
 };
 
 // Reprogramar ticket a tanda elegida por el usuario
-export const rescheduleToChosenTanda = async (req: AuthRequest, res: Response): Promise<void> => {
+export const rescheduleToChosenCircuito = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { ticketId } = req.params;
-    const { numero_tanda } = req.body;
+    const { numero_circuito } = req.body;
 
-    if (!numero_tanda) {
+    if (!numero_circuito) {
       res.status(400).json({ error: 'Número de tanda es obligatorio' });
       return;
     }
@@ -248,15 +248,15 @@ export const rescheduleToChosenTanda = async (req: AuthRequest, res: Response): 
       return;
     }
 
-    // Buscar vuelos disponibles en la tanda objetivo
+    // Buscar vuelos disponibles en el circuito objetivo
     const { Flight } = await import('../models');
     const targetFlights = await Flight.find({
-      numero_tanda,
+      numero_circuito,
       estado: 'abierto',
     });
 
     if (targetFlights.length === 0) {
-      res.status(404).json({ error: `No hay vuelos disponibles en la tanda ${numero_tanda}` });
+      res.status(404).json({ error: `No hay vuelos disponibles en el circuito ${numero_circuito}` });
       return;
     }
 
@@ -267,7 +267,7 @@ export const rescheduleToChosenTanda = async (req: AuthRequest, res: Response): 
 
     if (!vueloConEspacio) {
       res.status(400).json({
-        error: 'No hay vuelos con espacio disponible en la tanda seleccionada',
+        error: 'No hay vuelos con espacio disponible en el circuito seleccionada',
       });
       return;
     }
@@ -293,12 +293,12 @@ export const rescheduleToChosenTanda = async (req: AuthRequest, res: Response): 
 
     res.json({
       message: 'Ticket reprogramado exitosamente',
-      tanda_nueva: numero_tanda,
+      tanda_nueva: numero_circuito,
       vuelo: vueloConEspacio._id,
       ticket,
     });
   } catch (error: any) {
-    logger.error('Error en rescheduleToChosenTanda:', error);
+    logger.error('Error en rescheduleToChosenCircuito:', error);
     res.status(500).json({ error: 'Error al reprogramar ticket' });
   }
 };
@@ -378,7 +378,7 @@ export const inscribeTicket = async (req: AuthRequest, res: Response): Promise<v
       userId,
       payload: {
         flightId: flight._id.toString(),
-        numero_tanda: flight.numero_tanda,
+        numero_circuito: flight.numero_circuito,
         pasajero: ticket.pasajeros[0],
       },
     });
@@ -426,7 +426,7 @@ export const acceptTimeChange = async (req: AuthRequest, res: Response): Promise
 export const rejectTimeChange = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { ticketId } = req.params;
-    const { accion, monto_devolucion, metodo_pago, numero_tanda_nueva } = req.body;
+    const { accion, monto_devolucion, metodo_pago, numero_circuito_nueva } = req.body;
 
     const ticket = await Ticket.findById(ticketId).populate('userId flightId');
     if (!ticket) {
@@ -465,7 +465,7 @@ export const rejectTimeChange = async (req: AuthRequest, res: Response): Promise
         metodo_pago: metodo_pago || 'efectivo',
         cantidad_tickets: 1,
         tipo: 'devolucion',
-        descripcion: `Devolución por rechazo de cambio de hora - Tanda ${flight?.numero_tanda}`,
+        descripcion: `Devolución por rechazo de cambio de hora - Circuito ${flight?.numero_circuito}`,
       });
 
       // Cancelar ticket
@@ -484,7 +484,7 @@ export const rejectTimeChange = async (req: AuthRequest, res: Response): Promise
 
     // Acción: reprogramar
     if (accion === 'reprogramar') {
-      if (!numero_tanda_nueva) {
+      if (!numero_circuito_nueva) {
         res.status(400).json({ error: 'Número de tanda nueva es obligatorio para reprogramar' });
         return;
       }
@@ -493,13 +493,13 @@ export const rejectTimeChange = async (req: AuthRequest, res: Response): Promise
 
       // Buscar vuelos disponibles en la nueva tanda
       const vueloNuevo = await Flight.findOne({
-        numero_tanda: numero_tanda_nueva,
+        numero_circuito: numero_circuito_nueva,
         estado: 'abierto',
         $expr: { $lt: ['$asientos_ocupados', '$capacidad_total'] }
       });
 
       if (!vueloNuevo) {
-        res.status(404).json({ error: 'No hay vuelos disponibles en la tanda seleccionada' });
+        res.status(404).json({ error: 'No hay vuelos disponibles en el circuito seleccionada' });
         return;
       }
 
@@ -522,7 +522,7 @@ export const rejectTimeChange = async (req: AuthRequest, res: Response): Promise
 
       res.json({
         message: 'Ticket reprogramado exitosamente a nueva tanda',
-        tanda_nueva: numero_tanda_nueva,
+        tanda_nueva: numero_circuito_nueva,
         ticket,
       });
       return;

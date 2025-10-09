@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IFlight extends Document {
   aircraftId: Types.ObjectId;
-  numero_tanda: number;
+  numero_circuito: number; // Previously: numero_tanda (renamed for database migration)
   fecha_hora: Date;
   hora_prevista_salida?: Date;
   hora_inicio_vuelo?: Date;
@@ -23,7 +23,7 @@ const flightSchema = new Schema<IFlight>(
       ref: 'Aircraft',
       required: true,
     },
-    numero_tanda: {
+    numero_circuito: {
       type: Number,
       required: true,
       min: 1,
@@ -73,6 +73,6 @@ const flightSchema = new Schema<IFlight>(
 flightSchema.index({ estado: 1 });
 flightSchema.index({ fecha_hora: 1 });
 flightSchema.index({ aircraftId: 1 });
-flightSchema.index({ numero_tanda: 1 });
+flightSchema.index({ numero_circuito: 1 });
 
 export const Flight = mongoose.model<IFlight>('Flight', flightSchema);

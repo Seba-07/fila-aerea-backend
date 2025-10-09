@@ -15,8 +15,8 @@ export interface ITicket extends Document {
   estado: 'disponible' | 'asignado' | 'inscrito' | 'volado' | 'cancelado';
   reprogramacion_pendiente?: {
     nuevo_flightId: Types.ObjectId;
-    numero_tanda_anterior: number;
-    numero_tanda_nueva: number;
+    numero_circuito_anterior: number; // Previously: numero_tanda_anterior
+    numero_circuito_nuevo: number; // Previously: numero_tanda_nueva
     fecha_reprogramacion: Date;
   };
   cambio_hora_pendiente?: {
@@ -75,8 +75,8 @@ const ticketSchema = new Schema<ITicket>(
         type: Schema.Types.ObjectId,
         ref: 'Flight',
       },
-      numero_tanda_anterior: Number,
-      numero_tanda_nueva: Number,
+      numero_circuito_anterior: Number,
+      numero_circuito_nuevo: Number,
       fecha_reprogramacion: Date,
     },
     cambio_hora_pendiente: {

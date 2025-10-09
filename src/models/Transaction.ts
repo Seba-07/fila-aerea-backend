@@ -38,6 +38,8 @@ export interface ITransaction extends Document {
   // Relaciones
   userId?: Types.ObjectId; // Usuario creado después del pago
   ticketIds?: Types.ObjectId[]; // Tickets generados
+  reservationId?: Types.ObjectId; // Reserva asociada (opcional)
+  selectedFlightId?: Types.ObjectId; // Vuelo seleccionado (opcional)
 
   createdAt: Date;
   updatedAt: Date;
@@ -110,6 +112,14 @@ const transactionSchema = new Schema<ITransaction>(
         ref: 'Ticket',
       },
     ],
+    reservationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Reservation',
+    },
+    selectedFlightId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Flight',
+    },
   },
   {
     timestamps: true,
