@@ -20,8 +20,26 @@ const clearDatabase = async () => {
     // Eliminar todos los documentos de cada colección
     for (const collection of collections) {
       const count = await collection.countDocuments();
-      await collection.deleteMany({});
-      console.log(`   ✓ ${collection.collectionName}: ${count} documentos eliminados`);
+
+      // Para la colección de usuarios, mantener solo el admin staff
+      if (collection.collectionName === 'users') {
+        const adminUser = await collection.findOne({
+          email: { $in: ['admin@staff.com', 'admin@cac.com', 'staff@cac.com'] },
+          rol: 'staff'
+        });
+
+        await collection.deleteMany({});
+
+        if (adminUser) {
+          await collection.insertOne(adminUser);
+          console.log(`   ✓ ${collection.collectionName}: ${count} documentos eliminados (admin staff preservado)`);
+        } else {
+          console.log(`   ✓ ${collection.collectionName}: ${count} documentos eliminados (⚠️  no se encontró admin staff)`);
+        }
+      } else {
+        await collection.deleteMany({});
+        console.log(`   ✓ ${collection.collectionName}: ${count} documentos eliminados`);
+      }
     }
 
     console.log('\n✨ Base de datos limpiada exitosamente!\n');
