@@ -835,9 +835,9 @@ export const createReservation = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Create reservation with 5-minute expiration
+    // Create reservation with 10-minute expiration
     const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
     const reservation = await Reservation.create({
       flightId,

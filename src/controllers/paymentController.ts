@@ -246,38 +246,50 @@ export const confirmarPago = async (req: Request, res: Response): Promise<void> 
       }
 
       // Determine the flight to associate tickets with
-      let flightId = transaction.selectedFlightId;
-      if (!flightId && transaction.reservationId) {
+      let defaultFlightId = transaction.selectedFlightId;
+      if (!defaultFlightId && transaction.reservationId) {
         const reservation = await Reservation.findById(transaction.reservationId);
         if (reservation) {
-          flightId = reservation.flightId;
+          defaultFlightId = reservation.flightId;
         }
       }
 
       // Crear tickets para cada pasajero
       const ticketIds = [];
+      const flightsToUpdate: { [flightId: string]: number } = {}; // Contador de pasajeros por vuelo
+
       for (const pasajero of transaction.pasajeros) {
+        // El pasajero puede tener su propio flightId (vuelos separados) o usar el default
+        const pasajeroFlightId = pasajero.flightId || defaultFlightId;
+
         const ticket = await Ticket.create({
           userId: user._id,
           codigo_ticket: `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
           pasajeros: [pasajero],
-          estado: flightId ? 'asignado' : 'disponible',
-          flightId: flightId || undefined,
+          estado: pasajeroFlightId ? 'asignado' : 'disponible',
+          flightId: pasajeroFlightId || undefined,
         });
         ticketIds.push(ticket._id);
+
+        // Contar pasajeros por vuelo para actualizar asientos después
+        if (pasajeroFlightId) {
+          const flightIdStr = pasajeroFlightId.toString();
+          flightsToUpdate[flightIdStr] = (flightsToUpdate[flightIdStr] || 0) + 1;
+        }
       }
 
       transaction.ticketIds = ticketIds as any;
 
-      // If tickets are associated with a flight, the asientos_ocupados should already be
-      // incremented by the reservation (soft lock is now permanent)
-      // If no reservation was used but a flight was selected, we need to increment
-      if (flightId && !transaction.reservationId) {
-        const flight = await Flight.findById(flightId);
-        if (flight) {
-          flight.asientos_ocupados += transaction.cantidad_tickets;
-          await flight.save();
-          logger.info(`Asientos actualizados en vuelo ${flightId}: +${transaction.cantidad_tickets}`);
+      // Actualizar asientos_ocupados para cada vuelo
+      // Solo si NO hay reserva (si hay reserva, los asientos ya fueron incrementados)
+      if (!transaction.reservationId && Object.keys(flightsToUpdate).length > 0) {
+        for (const [flightIdStr, count] of Object.entries(flightsToUpdate)) {
+          const flight = await Flight.findById(flightIdStr);
+          if (flight) {
+            flight.asientos_ocupados += count;
+            await flight.save();
+            logger.info(`Asientos actualizados en vuelo ${flightIdStr}: +${count}`);
+          }
         }
       }
 

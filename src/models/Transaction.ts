@@ -5,6 +5,7 @@ export interface IPasajeroCompra {
   apellido: string;
   rut: string;
   esMenor: boolean;
+  flightId?: Types.ObjectId; // Vuelo asignado para este pasajero específico (para vuelos separados)
 }
 
 export interface ITransaction extends Document {
@@ -73,6 +74,7 @@ const transactionSchema = new Schema<ITransaction>(
         apellido: { type: String, required: true, trim: true },
         rut: { type: String, required: true, trim: true },
         esMenor: { type: Boolean, default: false },
+        flightId: { type: Schema.Types.ObjectId, ref: 'Flight' },
       },
     ],
     monto_total: {
