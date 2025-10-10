@@ -1,20 +1,46 @@
 import { Request, Response } from 'express';
-import { User } from '../models';
+import { User, Settings } from '../models';
 import { generateToken } from '../utils/jwt';
 import { logger } from '../utils/logger';
 import { EventLog } from '../models/EventLog';
+import bcrypt from 'bcryptjs';
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email } = req.body;
+    const { email, password } = req.body;
 
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       res.status(400).json({ error: 'Email inválido' });
       return;
     }
 
+    const emailLower = email.toLowerCase();
+    const STAFF_EMAIL = 'staff@cac.cl';
+
+    // Si el email es del staff, verificar contraseña
+    if (emailLower === STAFF_EMAIL) {
+      if (!password) {
+        res.status(400).json({ error: 'Contraseña requerida para usuario staff', requiresPassword: true });
+        return;
+      }
+
+      // Obtener settings para verificar contraseña
+      const settings = await Settings.findOne();
+      if (!settings) {
+        res.status(500).json({ error: 'Configuración del sistema no encontrada' });
+        return;
+      }
+
+      // Verificar contraseña
+      const passwordMatch = await bcrypt.compare(password, settings.admin_password);
+      if (!passwordMatch) {
+        res.status(401).json({ error: 'Contraseña incorrecta' });
+        return;
+      }
+    }
+
     // Buscar usuario
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: emailLower });
 
     if (!user) {
       res.status(404).json({ error: 'Usuario no encontrado' });

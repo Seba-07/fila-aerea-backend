@@ -3,6 +3,7 @@ import { webpayPlus, TRANSBANK_CONFIG } from '../config/transbank';
 import { Transaction, User, Ticket, Settings, Payment, Reservation, Flight } from '../models';
 import { logger } from '../utils/logger';
 import bcrypt from 'bcryptjs';
+import { emailService } from '../services/emailService';
 
 // Iniciar transacción de pago
 export const iniciarPago = async (req: Request, res: Response): Promise<void> => {
@@ -278,6 +279,24 @@ export const confirmarPago = async (req: Request, res: Response): Promise<void> 
           await flight.save();
           logger.info(`Asientos actualizados en vuelo ${flightId}: +${transaction.cantidad_tickets}`);
         }
+      }
+
+      // Obtener tickets creados para enviar por email
+      const ticketsCreados = await Ticket.find({ _id: { $in: ticketIds } });
+
+      // Enviar email con los tickets
+      try {
+        await emailService.sendTickets({
+          to: transaction.email,
+          tickets: ticketsCreados,
+          nombreComprador: transaction.nombre_comprador,
+          cantidadTickets: transaction.cantidad_tickets,
+          montoTotal: transaction.monto_total,
+        });
+        logger.info(`📧 Email enviado exitosamente a ${transaction.email}`);
+      } catch (emailError) {
+        logger.error('Error enviando email de tickets:', emailError);
+        // No fallar la transacción si el email falla
       }
 
       // Crear registro de pago en historial
