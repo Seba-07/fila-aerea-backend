@@ -90,8 +90,16 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
     }
     const PRECIO_POR_TICKET = settings.precio_ticket;
 
-    // Calcular monto total
-    const monto_total = PRECIO_POR_TICKET * cantidad_tickets;
+    // Calcular subtotal (tickets sin comisión)
+    const subtotal = PRECIO_POR_TICKET * cantidad_tickets;
+
+    // Calcular comisión Webpay (3.5% - tarjeta de crédito)
+    const comisionBruta = subtotal * 0.035;
+    // Redondear al múltiplo de 100 superior
+    const comisionRedondeada = Math.ceil(comisionBruta / 100) * 100;
+
+    // Monto total = subtotal + comisión
+    const monto_total = subtotal + comisionRedondeada;
 
     // Generar orden de compra única (máximo 26 caracteres para Transbank)
     // Formato: ORD + timestamp últimos 10 dígitos + random 6 caracteres = ~20 chars
@@ -101,7 +109,11 @@ export const iniciarPago = async (req: Request, res: Response): Promise<void> =>
     const session_id = `SES${timestamp}`;
 
     const returnUrl = TRANSBANK_CONFIG.returnUrl;
-    logger.info(`Iniciando pago - Buy Order: ${buy_order}, Monto: ${monto_total}, Return URL: ${returnUrl}`);
+    logger.info(`Iniciando pago - Buy Order: ${buy_order}`);
+    logger.info(`  Subtotal (${cantidad_tickets} tickets): $${subtotal}`);
+    logger.info(`  Comisión Webpay (3.5%): $${comisionRedondeada}`);
+    logger.info(`  Total a cobrar: $${monto_total}`);
+    logger.info(`  Return URL: ${returnUrl}`);
     logger.info(`Variables de entorno - TRANSBANK_RETURN_URL: ${process.env.TRANSBANK_RETURN_URL}, FRONTEND_URL: ${process.env.FRONTEND_URL}`);
 
     // Validar que tenemos una return URL válida
