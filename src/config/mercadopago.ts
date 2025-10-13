@@ -1,5 +1,9 @@
-import mercadopago from 'mercadopago';
+import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { logger } from '../utils/logger';
+
+let mercadopagoClient: MercadoPagoConfig | null = null;
+let preferenceClient: Preference | null = null;
+let paymentClient: Payment | null = null;
 
 // Configuración de Mercado Pago
 export const initializeMercadoPago = () => {
@@ -10,11 +14,22 @@ export const initializeMercadoPago = () => {
     return;
   }
 
-  mercadopago.configure({
-    access_token: accessToken,
+  mercadopagoClient = new MercadoPagoConfig({
+    accessToken,
+    options: { timeout: 5000 }
   });
 
+  preferenceClient = new Preference(mercadopagoClient);
+  paymentClient = new Payment(mercadopagoClient);
+
   logger.info('✅ Mercado Pago configurado correctamente');
+};
+
+export const getMercadoPagoClients = () => {
+  if (!mercadopagoClient || !preferenceClient || !paymentClient) {
+    throw new Error('Mercado Pago no está configurado');
+  }
+  return { mercadopagoClient, preferenceClient, paymentClient };
 };
 
 export const MERCADOPAGO_CONFIG = {
@@ -24,5 +39,3 @@ export const MERCADOPAGO_CONFIG = {
   failureUrl: `${process.env.FRONTEND_URL}/pago/error`,
   pendingUrl: `${process.env.FRONTEND_URL}/pago/pendiente`,
 };
-
-export { mercadopago };

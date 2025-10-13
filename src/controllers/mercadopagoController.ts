@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { mercadopago, MERCADOPAGO_CONFIG } from '../config/mercadopago';
+import { getMercadoPagoClients, MERCADOPAGO_CONFIG } from '../config/mercadopago';
 import { Transaction, User, Ticket, Settings, Payment, Reservation, Flight } from '../models';
 import { logger } from '../utils/logger';
 import bcrypt from 'bcryptjs';
@@ -97,36 +97,41 @@ export const iniciarPagoMP = async (req: Request, res: Response): Promise<void> 
     logger.info(`  Comisión Mercado Pago (4.5%): $${comisionRedondeada}`);
     logger.info(`  Total a cobrar: $${monto_total}`);
 
+    // Obtener cliente de Mercado Pago
+    const { preferenceClient } = getMercadoPagoClients();
+
     // Crear preferencia de pago en Mercado Pago
     const preference = {
-      items: [
-        {
-          title: `${cantidad_tickets} Ticket(s) de Vuelo - Club Aéreo Castro`,
-          quantity: 1,
-          unit_price: monto_total,
-          currency_id: 'CLP',
+      body: {
+        items: [
+          {
+            title: `${cantidad_tickets} Ticket(s) de Vuelo - Club Aéreo Castro`,
+            quantity: 1,
+            unit_price: monto_total,
+            currency_id: 'CLP',
+          },
+        ],
+        payer: {
+          name: nombre_comprador.split(' ')[0],
+          surname: nombre_comprador.split(' ').slice(1).join(' ') || '',
+          email: email,
+          phone: {
+            number: telefono || '',
+          },
         },
-      ],
-      payer: {
-        name: nombre_comprador.split(' ')[0],
-        surname: nombre_comprador.split(' ').slice(1).join(' ') || '',
-        email: email,
-        phone: {
-          number: telefono || '',
+        back_urls: {
+          success: `${MERCADOPAGO_CONFIG.successUrl}?external_reference=${external_reference}`,
+          failure: MERCADOPAGO_CONFIG.failureUrl,
+          pending: MERCADOPAGO_CONFIG.pendingUrl,
         },
-      },
-      back_urls: {
-        success: `${MERCADOPAGO_CONFIG.successUrl}?external_reference=${external_reference}`,
-        failure: MERCADOPAGO_CONFIG.failureUrl,
-        pending: MERCADOPAGO_CONFIG.pendingUrl,
-      },
-      auto_return: 'approved' as const,
-      external_reference: external_reference,
-      notification_url: MERCADOPAGO_CONFIG.notificationUrl,
-      statement_descriptor: 'CLUB AEREO CASTRO',
+        auto_return: 'approved' as const,
+        external_reference: external_reference,
+        notification_url: MERCADOPAGO_CONFIG.notificationUrl,
+        statement_descriptor: 'CLUB AEREO CASTRO',
+      }
     };
 
-    const response = await mercadopago.preferences.create(preference);
+    const response = await preferenceClient.create(preference);
 
     // Guardar transacción en BD
     const transaction = await Transaction.create({
@@ -148,8 +153,8 @@ export const iniciarPagoMP = async (req: Request, res: Response): Promise<void> 
 
     // Retornar URL para redirigir a Mercado Pago
     res.json({
-      init_point: response.body.init_point, // URL para redirigir al usuario
-      preference_id: response.body.id,
+      init_point: response.init_point, // URL para redirigir al usuario
+      preference_id: response.id,
       external_reference,
       monto_total,
     });
@@ -177,9 +182,11 @@ export const webhookMP = async (req: Request, res: Response): Promise<void> => {
 
     const paymentId = data.id;
 
+    // Obtener cliente de Mercado Pago
+    const { paymentClient } = getMercadoPagoClients();
+
     // Obtener información del pago desde Mercado Pago
-    const payment = await mercadopago.payment.get(paymentId);
-    const paymentData = payment.body;
+    const paymentData = await paymentClient.get({ id: paymentId });
 
     logger.info('Datos del pago:', paymentData);
 
@@ -363,8 +370,8 @@ export const confirmarPagoMP = async (req: Request, res: Response): Promise<void
     // Si el webhook aún no procesó, esperar un momento y consultar
     if (payment_id) {
       try {
-        const payment = await mercadopago.payment.get(Number(payment_id));
-        const paymentData = payment.body;
+        const { paymentClient } = getMercadoPagoClients();
+        const paymentData = await paymentClient.get({ id: Number(payment_id) });
 
         if (paymentData.status === 'approved' && transaction.estado === 'pendiente') {
           // Procesar manualmente (el webhook debería haberlo hecho, pero por si acaso)
