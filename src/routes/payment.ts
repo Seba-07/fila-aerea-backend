@@ -1,15 +1,17 @@
 import { Router } from 'express';
 import { iniciarPago, confirmarPago, getTransactionStatus } from '../controllers/paymentController';
+import { iniciarPagoMP, webhookMP, confirmarPagoMP } from '../controllers/mercadopagoController';
 
 const router = Router();
 
-// Iniciar pago (público)
+// Transbank routes
 router.post('/iniciar', iniciarPago);
-
-// Confirmar pago - callback de Transbank (público)
 router.post('/confirmar', confirmarPago);
-
-// Obtener estado de transacción (público, por ahora)
 router.get('/status/:buy_order', getTransactionStatus);
+
+// Mercado Pago routes
+router.post('/mercadopago/iniciar', iniciarPagoMP);
+router.post('/mercadopago/webhook', webhookMP);
+router.get('/mercadopago/confirmar', confirmarPagoMP);
 
 export default router;
