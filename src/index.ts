@@ -8,7 +8,6 @@ import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 import path from 'path';
 import { connectDB } from './config/database';
-import { initializeMercadoPago } from './config/mercadopago';
 import { logger } from './utils/logger';
 import { globalLimiter } from './middlewares/rateLimiter';
 import { errorHandler } from './middlewares/errorHandler';
@@ -61,9 +60,6 @@ const startServer = async () => {
   try {
     // Conectar a MongoDB
     await connectDB();
-
-    // Inicializar Mercado Pago
-    initializeMercadoPago();
 
     // Inicializar Socket.IO
     initSocket(server);
