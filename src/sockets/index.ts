@@ -6,9 +6,19 @@ import { logger } from '../utils/logger';
 let io: Server;
 
 export const initSocket = (server: HTTPServer): Server => {
+  // Configurar CORS para múltiples dominios (igual que Express)
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://fila-aerea-frontend.vercel.app',
+    'https://vueloscastro.cl',
+    'https://www.vueloscastro.cl',
+    process.env.FRONTEND_URL,
+    process.env.CORS_ORIGIN,
+  ].filter(Boolean);
+
   io = new Server(server, {
     cors: {
-      origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+      origin: allowedOrigins,
       credentials: true,
     },
   });
