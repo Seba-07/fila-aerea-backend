@@ -21,9 +21,29 @@ const PORT = process.env.PORT || 4000;
 
 // Middlewares de seguridad
 app.use(helmet());
+
+// Configurar CORS para múltiples dominios
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://fila-aerea-frontend.vercel.app',
+  'https://vueloscastro.cl',
+  'https://www.vueloscastro.cl',
+  process.env.FRONTEND_URL,
+  process.env.CORS_ORIGIN,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Permitir requests sin origin (mobile apps, curl, etc)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );
