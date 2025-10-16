@@ -55,11 +55,59 @@ app.use('/api', routes);
 // Error handler
 app.use(errorHandler);
 
+// Función para inicializar usuario staff
+const initStaffUser = async () => {
+  try {
+    const bcrypt = (await import('bcryptjs')).default;
+    const { User, Settings } = await import('./models');
+
+    // Verificar si el usuario staff ya existe
+    const existingStaff = await User.findOne({ email: 'staff@cac.cl' });
+
+    if (!existingStaff) {
+      // Crear contraseña hasheada
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+
+      // Crear usuario staff
+      await User.create({
+        email: 'staff@cac.cl',
+        password: hashedPassword,
+        nombre: 'Staff',
+        apellido: 'Club Aéreo',
+        rut: '00000000-0',
+        rol: 'staff',
+        verificado: true,
+      });
+
+      logger.info('✅ Usuario staff creado: staff@cac.cl / admin123');
+    }
+
+    // Verificar/crear Settings
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = await Settings.create({
+        duracion_circuito_minutos: 20,
+        max_circuitos_sin_reabastecimiento_default: 4,
+        precio_ticket: 25000,
+        timezone_offset_hours: 3,
+        minutos_antes_embarque: 15,
+        admin_password: 'admin123',
+      });
+      logger.info('✅ Settings inicializado con contraseña admin');
+    }
+  } catch (error) {
+    logger.error('Error inicializando staff:', error);
+  }
+};
+
 // Inicializar servicios
 const startServer = async () => {
   try {
     // Conectar a MongoDB
     await connectDB();
+
+    // Inicializar usuario staff si no existe
+    await initStaffUser();
 
     // Inicializar Socket.IO
     initSocket(server);
