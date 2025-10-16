@@ -3,7 +3,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 export interface IPayment extends Document {
   userId: Types.ObjectId;
   monto: number;
-  metodo_pago: 'transferencia' | 'tarjeta' | 'efectivo' | 'webpay';
+  metodo_pago: 'transferencia' | 'passline' | 'efectivo' | 'webpay';
   cantidad_tickets: number;
   tipo: 'compra' | 'ajuste_positivo' | 'ajuste_negativo' | 'devolucion';
   descripcion?: string;
@@ -30,7 +30,7 @@ const paymentSchema = new Schema<IPayment>(
     },
     metodo_pago: {
       type: String,
-      enum: ['transferencia', 'tarjeta', 'efectivo', 'webpay'],
+      enum: ['transferencia', 'passline', 'efectivo', 'webpay'],
       required: true,
     },
     cantidad_tickets: {

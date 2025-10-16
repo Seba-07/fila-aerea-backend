@@ -26,7 +26,7 @@ export const registerPassenger = async (
       return;
     }
 
-    if (!['transferencia', 'tarjeta', 'efectivo'].includes(metodo_pago)) {
+    if (!['transferencia', 'passline', 'efectivo'].includes(metodo_pago)) {
       res.status(400).json({
         error: 'Método de pago inválido',
       });
