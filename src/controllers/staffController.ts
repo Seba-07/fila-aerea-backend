@@ -664,3 +664,111 @@ export const deleteCircuito = async (
     res.status(500).json({ error: 'Error al eliminar tanda' });
   }
 };
+
+// Validar código QR de pase de embarque
+export const validateQR = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { ticketId, codigo, flightId, circuito } = req.body;
+
+    if (!ticketId || !codigo || !flightId) {
+      res.status(400).json({
+        valido: false,
+        mensaje: 'Datos del QR incompletos'
+      });
+      return;
+    }
+
+    // Verificar que el ticket existe y está inscrito
+    const ticket = await Ticket.findById(ticketId);
+
+    if (!ticket) {
+      res.status(404).json({
+        valido: false,
+        mensaje: 'Ticket no encontrado'
+      });
+      return;
+    }
+
+    if (ticket.codigo_ticket !== codigo) {
+      res.status(400).json({
+        valido: false,
+        mensaje: 'Código de ticket no coincide'
+      });
+      return;
+    }
+
+    if (ticket.estado !== 'inscrito') {
+      res.status(400).json({
+        valido: false,
+        mensaje: `Ticket no está inscrito (estado: ${ticket.estado})`
+      });
+      return;
+    }
+
+    if (String(ticket.flightId) !== flightId) {
+      res.status(400).json({
+        valido: false,
+        mensaje: 'Este ticket no pertenece a este vuelo'
+      });
+      return;
+    }
+
+    // Verificar que el vuelo existe y está en estado correcto
+    const { Flight } = await import('../models');
+    const flight = await Flight.findById(flightId);
+
+    if (!flight) {
+      res.status(404).json({
+        valido: false,
+        mensaje: 'Vuelo no encontrado'
+      });
+      return;
+    }
+
+    if (flight.estado !== 'boarding' && flight.estado !== 'abierto') {
+      res.status(400).json({
+        valido: false,
+        mensaje: `Vuelo no está en embarque (estado: ${flight.estado})`
+      });
+      return;
+    }
+
+    // Registrar evento de validación exitosa
+    await EventLog.create({
+      type: 'qr_validated',
+      entity: 'ticket',
+      entityId: String(ticket._id),
+      userId: req.user?.userId,
+      payload: {
+        codigo_ticket: codigo,
+        flightId,
+        circuito,
+        validado_por: req.user?.email
+      },
+    });
+
+    logger.info(`✅ QR validado: ticket ${codigo} para vuelo ${flightId}`);
+
+    res.json({
+      valido: true,
+      mensaje: 'Pasajero verificado correctamente',
+      ticket: {
+        codigo: ticket.codigo_ticket,
+        pasajero: ticket.pasajeros?.[0] || null
+      },
+      flight: {
+        numero_circuito: flight.numero_circuito,
+        estado: flight.estado
+      }
+    });
+  } catch (error: any) {
+    logger.error('Error en validateQR:', error);
+    res.status(500).json({
+      valido: false,
+      mensaje: 'Error al validar QR'
+    });
+  }
+};

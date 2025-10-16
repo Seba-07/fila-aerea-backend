@@ -9,6 +9,7 @@ import {
   getPayments,
   createCircuito,
   deleteCircuito,
+  validateQR,
 } from '../controllers/staffController';
 import {
   getAircrafts,
@@ -37,6 +38,9 @@ router.get('/payments', authenticate, requireStaff, getPayments);
 // Circuitos
 router.post('/circuitos', authenticate, requireStaff, createCircuito);
 router.delete('/circuitos/:numero_circuito', authenticate, requireStaff, deleteCircuito);
+
+// QR Validation
+router.post('/validate-qr', authenticate, requireStaff, validateQR);
 
 // Aviones
 router.get('/aircrafts', authenticate, requireStaff, getAircrafts);
