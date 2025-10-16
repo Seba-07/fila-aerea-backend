@@ -17,27 +17,28 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const emailLower = email.toLowerCase();
     const STAFF_EMAIL = 'staff@cac.cl';
 
-    // Si el email es del staff, verificar contraseña
+    // TEMPORALMENTE DESHABILITADO: Validación de contraseña para staff
+    // TODO: Reactivar cuando se confirme que el login funciona
+    /*
     if (emailLower === STAFF_EMAIL) {
       if (!password) {
         res.status(400).json({ error: 'Contraseña requerida para usuario staff', requiresPassword: true });
         return;
       }
 
-      // Obtener settings para verificar contraseña
       const settings = await Settings.findOne();
       if (!settings) {
         res.status(500).json({ error: 'Configuración del sistema no encontrada' });
         return;
       }
 
-      // Verificar contraseña
       const passwordMatch = await bcrypt.compare(password, settings.admin_password);
       if (!passwordMatch) {
         res.status(401).json({ error: 'Contraseña incorrecta' });
         return;
       }
     }
+    */
 
     // Buscar usuario
     const user = await User.findOne({ email: emailLower });
