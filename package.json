@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "seed": "ts-node src/scripts/seed.ts",
     "clear-db": "ts-node src/scripts/clearDatabase.ts",
+    "init-staff": "ts-node src/scripts/initStaff.ts",
     "test": "jest --coverage",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\""
