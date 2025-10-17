@@ -728,10 +728,10 @@ export const validateQR = async (
       return;
     }
 
-    if (flight.estado !== 'boarding' && flight.estado !== 'abierto') {
+    if (flight.estado !== 'abierto' && flight.estado !== 'en_vuelo') {
       res.status(400).json({
         valido: false,
-        mensaje: `Vuelo no está en embarque (estado: ${flight.estado})`
+        mensaje: `Vuelo no disponible para embarque (estado: ${flight.estado})`
       });
       return;
     }
