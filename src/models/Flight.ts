@@ -11,6 +11,7 @@ export interface IFlight extends Document {
   asientos_ocupados: number;
   estado: 'abierto' | 'en_vuelo' | 'finalizado' | 'reprogramado' | 'cancelado';
   razon_reprogramacion?: 'combustible' | 'meteorologia' | 'mantenimiento' | 'cancelacion_dia';
+  piloto_nombre?: string;
   notas?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -59,6 +60,11 @@ const flightSchema = new Schema<IFlight>(
     razon_reprogramacion: {
       type: String,
       enum: ['combustible', 'meteorologia', 'mantenimiento', 'cancelacion_dia'],
+    },
+    piloto_nombre: {
+      type: String,
+      trim: true,
+      maxlength: 100,
     },
     notas: {
       type: String,

@@ -94,6 +94,7 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
           matricula: (vuelo.aircraftId as any)?.matricula,
           modelo: (vuelo.aircraftId as any)?.modelo,
           estado: vuelo.estado,
+          piloto_nombre: vuelo.piloto_nombre || 'Sin asignar',
           pasajeros,
         };
       })
