@@ -385,6 +385,75 @@ export const updatePassengerTickets = async (
   }
 };
 
+// Actualizar información de pasajeros en un ticket
+export const updateTicketPassengers = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { ticketId } = req.params;
+    const { pasajeros } = req.body;
+
+    if (!pasajeros || !Array.isArray(pasajeros)) {
+      res.status(400).json({ error: 'Se requiere un array de pasajeros' });
+      return;
+    }
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
+      return;
+    }
+
+    // Validar que si hay menores, haya al menos un adulto en el ticket
+    const menores = pasajeros.filter(p => p.esMenor === true);
+    const adultos = pasajeros.filter(p => !p.esMenor);
+
+    if (menores.length > 0 && adultos.length === 0) {
+      res.status(400).json({
+        error: 'Si hay menores de edad en el ticket, debe haber al menos un adulto',
+      });
+      return;
+    }
+
+    ticket.pasajeros = pasajeros.map(p => ({
+      nombre: p.nombre || '',
+      apellido: p.apellido || '',
+      rut: p.rut || '',
+      esMenor: p.esMenor || false,
+    }));
+
+    // Si el ticket tenía pasajeros y ahora no tiene, cambiar estado a disponible
+    if (pasajeros.length === 0 && ticket.estado === 'asignado') {
+      ticket.estado = 'disponible';
+    }
+    // Si el ticket no tenía pasajeros y ahora tiene, cambiar a asignado
+    else if (pasajeros.length > 0 && ticket.estado === 'disponible') {
+      ticket.estado = 'asignado';
+    }
+
+    await ticket.save();
+
+    await EventLog.create({
+      type: 'ticket_passengers_updated',
+      entity: 'ticket',
+      entityId: String(ticket._id),
+      userId: req.user?.userId,
+      payload: {
+        ticketId: ticket._id,
+        pasajeros: ticket.pasajeros,
+      },
+    });
+
+    logger.info(`Información de pasajeros actualizada para ticket ${ticket._id}`);
+
+    res.json({ message: 'Información de pasajeros actualizada exitosamente', ticket });
+  } catch (error: any) {
+    logger.error('Error en updateTicketPassengers:', error);
+    res.status(500).json({ error: 'Error al actualizar información de pasajeros' });
+  }
+};
+
 // Eliminar pasajero (con devolución completa)
 export const deletePassenger = async (
   req: AuthRequest,

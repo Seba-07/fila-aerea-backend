@@ -5,6 +5,7 @@ import {
   getPassengersWithoutFlight,
   updatePassenger,
   updatePassengerTickets,
+  updateTicketPassengers,
   updatePassengerPayment,
   deletePassenger,
   getPayments,
@@ -34,6 +35,7 @@ router.get('/passengers-without-flight', authenticate, requireStaff, getPassenge
 router.patch('/passengers/:passengerId', authenticate, requireStaff, updatePassenger);
 router.patch('/passengers/:passengerId/tickets', authenticate, requireStaff, updatePassengerTickets);
 router.patch('/passengers/:passengerId/payment', authenticate, requireStaff, updatePassengerPayment);
+router.patch('/tickets/:ticketId/passengers', authenticate, requireStaff, updateTicketPassengers);
 router.delete('/passengers/:passengerId', authenticate, requireStaff, deletePassenger);
 router.get('/payments', authenticate, requireStaff, getPayments);
 
