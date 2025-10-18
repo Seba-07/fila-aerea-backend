@@ -257,6 +257,56 @@ export const updateFlightStatus = async (
   }
 };
 
+// Actualizar vuelo (campos generales como pilotId, notas, etc)
+export const updateFlight = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // No permitir actualizar estos campos críticos por esta ruta
+    delete updates.aircraftId;
+    delete updates.numero_circuito;
+    delete updates.asientos_ocupados;
+    delete updates.capacidad_total; // Usar updateFlightCapacity
+    delete updates.estado; // Usar updateFlightStatus
+
+    const flight = await Flight.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    )
+      .populate('aircraftId', 'matricula modelo capacidad')
+      .populate('pilotId', 'nombre numero_licencia');
+
+    if (!flight) {
+      res.status(404).json({ error: 'Vuelo no encontrado' });
+      return;
+    }
+
+    await EventLog.create({
+      type: 'flight_updated',
+      entity: 'flight',
+      entityId: flight._id.toString(),
+      userId: req.user?.userId,
+      payload: updates,
+    });
+
+    const io = getIO();
+    io.emit('flightUpdated', {
+      flightId: flight._id,
+      ...updates,
+    });
+
+    res.json({ message: 'Vuelo actualizado', flight });
+  } catch (error: any) {
+    logger.error('Error en updateFlight:', error);
+    res.status(500).json({ error: 'Error al actualizar vuelo' });
+  }
+};
+
 export const updateFlightCapacity = async (
   req: AuthRequest,
   res: Response

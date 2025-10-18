@@ -3,6 +3,7 @@ import {
   createFlight,
   getFlights,
   getFlightById,
+  updateFlight,
   updateFlightStatus,
   updateFlightCapacity,
   rescheduleFlightToNextCircuito,
@@ -40,8 +41,8 @@ router.post('/', authenticate, requireStaff, createFlight);
 
 // Rutas de staff
 router.patch('/:id/status', authenticate, requireStaff, updateFlightStatus);
-router.patch('/:id', authenticate, requireStaff, updateFlightStatus); // Alias para compatibilidad
 router.patch('/:id/capacity', authenticate, requireStaff, updateFlightCapacity);
+router.patch('/:id', authenticate, requireStaff, updateFlight); // Actualización general (pilotId, notas, etc)
 router.post('/:id/reschedule', authenticate, requireStaff, rescheduleFlightToNextCircuito);
 router.post('/:id/cancel-aircraft-day', authenticate, requireStaff, cancelAircraftForDay);
 router.delete('/:id', authenticate, requireStaff, deleteFlight);
