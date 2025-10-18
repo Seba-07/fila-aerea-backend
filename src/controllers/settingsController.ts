@@ -607,3 +607,70 @@ export const recalcularHorasCircuitos = async (req: AuthRequest, res: Response):
     res.status(500).json({ error: 'Error al recalcular horas de circuitos' });
   }
 };
+
+// Generar manifiestos faltantes para vuelos finalizados
+export const generarManifiestosFaltantes = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { FlightManifest, Ticket } = await import('../models');
+
+    // Buscar todos los vuelos finalizados o en vuelo
+    const vuelosConEstado = await Flight.find({
+      estado: { $in: ['en_vuelo', 'finalizado'] }
+    })
+      .populate('aircraftId')
+      .sort({ numero_circuito: 1, 'aircraftId.matricula': 1 });
+
+    let manifiestosCreadosCount = 0;
+    let manifestosExistentesCount = 0;
+
+    for (const vuelo of vuelosConEstado) {
+      // Verificar si ya tiene manifiesto
+      const existente = await FlightManifest.findOne({ flightId: vuelo._id });
+
+      if (existente) {
+        manifestosExistentesCount++;
+        logger.info(`✓ Manifiesto ya existe para vuelo ${vuelo._id} (${(vuelo.aircraftId as any)?.matricula}, Circuito ${vuelo.numero_circuito})`);
+        continue;
+      }
+
+      // Buscar tickets del vuelo
+      const tickets = await Ticket.find({
+        flightId: vuelo._id,
+        estado: { $in: ['inscrito', 'asignado', 'embarcado', 'volado'] },
+      }).populate('userId');
+
+      const pasajeros = tickets
+        .filter(t => t.pasajeros && t.pasajeros.length > 0)
+        .map(t => ({
+          nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
+          rut: t.pasajeros[0].rut || 'Sin RUT',
+          esMenor: t.pasajeros[0].esMenor || false,
+          ticketId: t._id,
+        }));
+
+      // Crear manifiesto
+      await FlightManifest.create({
+        flightId: vuelo._id,
+        numero_circuito: vuelo.numero_circuito,
+        pasajeros: pasajeros,
+        fecha_vuelo: vuelo.fecha_hora,
+        hora_despegue: vuelo.hora_inicio_vuelo || vuelo.fecha_hora,
+        hora_aterrizaje: vuelo.hora_arribo || undefined,
+        createdBy: req.user!.userId,
+      });
+
+      manifiestosCreadosCount++;
+      logger.info(`✅ Manifiesto creado retroactivamente para vuelo ${vuelo._id} (${(vuelo.aircraftId as any)?.matricula}, Circuito ${vuelo.numero_circuito}) con ${pasajeros.length} pasajeros`);
+    }
+
+    res.json({
+      message: 'Proceso completado',
+      manifiestos_creados: manifiestosCreadosCount,
+      manifiestos_existentes: manifestosExistentesCount,
+      total_vuelos_procesados: vuelosConEstado.length
+    });
+  } catch (error: any) {
+    logger.error('Error en generarManifiestosFaltantes:', error);
+    res.status(500).json({ error: 'Error al generar manifiestos faltantes' });
+  }
+};
