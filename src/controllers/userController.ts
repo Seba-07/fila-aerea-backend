@@ -71,9 +71,14 @@ export const updateTicket = async (req: AuthRequest, res: Response): Promise<voi
 
       ticket.flightId = flightId;
 
-      // Si se asigna un vuelo y hay pasajeros, cambiar estado a asignado e incrementar asientos
-      if (flightId && ticket.pasajeros && ticket.pasajeros.length > 0) {
-        ticket.estado = 'asignado';
+      // Si se asigna un vuelo, cambiar estado a inscrito e incrementar asientos
+      if (flightId) {
+        // Si tiene pasajeros, estado 'inscrito', sino 'asignado'
+        if (ticket.pasajeros && ticket.pasajeros.length > 0) {
+          ticket.estado = 'inscrito';
+        } else {
+          ticket.estado = 'asignado';
+        }
 
         // Incrementar asientos ocupados del nuevo vuelo (solo si es un cambio nuevo)
         if (!oldFlightId || oldFlightId.toString() !== flightId) {
@@ -81,6 +86,13 @@ export const updateTicket = async (req: AuthRequest, res: Response): Promise<voi
           await Flight.findByIdAndUpdate(flightId, {
             $inc: { asientos_ocupados: 1 }
           });
+        }
+      } else {
+        // Si se elimina el vuelo, volver a disponible o asignado según tenga pasajeros
+        if (ticket.pasajeros && ticket.pasajeros.length > 0) {
+          ticket.estado = 'asignado';
+        } else {
+          ticket.estado = 'disponible';
         }
       }
     }
