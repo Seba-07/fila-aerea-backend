@@ -153,11 +153,28 @@ export const getPassengers = async (
       createdAt: -1,
     });
 
+    // Actualizar estados de tickets en vuelos finalizados
+    const { Flight } = await import('../models');
+    const vuelosFinalizados = await Flight.find({ estado: 'finalizado' }).select('_id');
+    const idsVuelosFinalizados = vuelosFinalizados.map(v => v._id);
+
+    const updateResult = await Ticket.updateMany(
+      {
+        flightId: { $in: idsVuelosFinalizados },
+        estado: { $in: ['asignado', 'inscrito', 'embarcado'] }
+      },
+      { $set: { estado: 'volado' } }
+    );
+
+    if (updateResult.modifiedCount > 0) {
+      logger.info(`✅ ${updateResult.modifiedCount} tickets actualizados a 'volado' por vuelos finalizados`);
+    }
+
     const passengersWithTickets = await Promise.all(
       passengers.map(async (p) => {
         const tickets = await Ticket.find({
           userId: p._id,
-        });
+        }).populate('flightId', 'numero_circuito');
 
         // Obtener pagos del pasajero
         const payments = await Payment.find({
@@ -194,6 +211,8 @@ export const getPassengers = async (
             codigo_ticket: t.codigo_ticket,
             estado: t.estado,
             pasajeros: t.pasajeros,
+            flightId: t.flightId ? (t.flightId as any)._id : null,
+            flightNumber: t.flightId ? (t.flightId as any).numero_circuito : null,
           })),
         };
       })
