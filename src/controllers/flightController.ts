@@ -271,7 +271,7 @@ export const updateFlight = async (
     delete updates.numero_circuito;
     delete updates.asientos_ocupados;
     delete updates.capacidad_total; // Usar updateFlightCapacity
-    delete updates.estado; // Usar updateFlightStatus
+    // NOTA: Permitimos actualizar estado directamente para casos especiales
 
     const flight = await Flight.findByIdAndUpdate(
       id,
@@ -287,23 +287,41 @@ export const updateFlight = async (
     }
 
     // Si se actualizó hora_arribo, sincronizar con el manifiesto
-    if (updates.hora_arribo) {
+    if (updates.hora_arribo !== undefined) {
       const { FlightManifest } = await import('../models');
-      await FlightManifest.findOneAndUpdate(
-        { flightId: flight._id },
-        { $set: { hora_aterrizaje: updates.hora_arribo } }
-      );
-      logger.info(`Hora de aterrizaje sincronizada en manifiesto para vuelo ${flight._id}`);
+      if (updates.hora_arribo === null || updates.hora_arribo === '') {
+        // Eliminar hora de aterrizaje del manifiesto
+        await FlightManifest.findOneAndUpdate(
+          { flightId: flight._id },
+          { $unset: { hora_aterrizaje: '' } }
+        );
+        logger.info(`Hora de aterrizaje eliminada del manifiesto para vuelo ${flight._id}`);
+      } else {
+        await FlightManifest.findOneAndUpdate(
+          { flightId: flight._id },
+          { $set: { hora_aterrizaje: updates.hora_arribo } }
+        );
+        logger.info(`Hora de aterrizaje sincronizada en manifiesto para vuelo ${flight._id}`);
+      }
     }
 
     // Si se actualizó hora_inicio_vuelo, sincronizar con el manifiesto
-    if (updates.hora_inicio_vuelo) {
+    if (updates.hora_inicio_vuelo !== undefined) {
       const { FlightManifest } = await import('../models');
-      await FlightManifest.findOneAndUpdate(
-        { flightId: flight._id },
-        { $set: { hora_despegue: updates.hora_inicio_vuelo } }
-      );
-      logger.info(`Hora de despegue sincronizada en manifiesto para vuelo ${flight._id}`);
+      if (updates.hora_inicio_vuelo === null || updates.hora_inicio_vuelo === '') {
+        // Eliminar hora de despegue del manifiesto
+        await FlightManifest.findOneAndUpdate(
+          { flightId: flight._id },
+          { $unset: { hora_despegue: '' } }
+        );
+        logger.info(`Hora de despegue eliminada del manifiesto para vuelo ${flight._id}`);
+      } else {
+        await FlightManifest.findOneAndUpdate(
+          { flightId: flight._id },
+          { $set: { hora_despegue: updates.hora_inicio_vuelo } }
+        );
+        logger.info(`Hora de despegue sincronizada en manifiesto para vuelo ${flight._id}`);
+      }
     }
 
     await EventLog.create({
