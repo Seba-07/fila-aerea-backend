@@ -682,3 +682,44 @@ export const generarManifiestosFaltantes = async (req: AuthRequest, res: Respons
     res.status(500).json({ error: 'Error al generar manifiestos faltantes' });
   }
 };
+
+// Migrar estados de tickets antiguos (asignado/embarcado) a nuevos estados
+export const migrarEstadosTickets = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { Ticket } = await import('../models');
+
+    // Buscar tickets con estados antiguos
+    const ticketsAntiguos = await Ticket.find({
+      estado: { $in: ['asignado', 'embarcado'] }
+    });
+
+    logger.info(`Encontrados ${ticketsAntiguos.length} tickets con estados antiguos`);
+
+    let migrados = 0;
+    for (const ticket of ticketsAntiguos) {
+      const oldEstado = ticket.estado;
+
+      // Si tiene flightId -> inscrito, sino -> disponible
+      if (ticket.flightId) {
+        ticket.estado = 'inscrito' as any;
+      } else {
+        ticket.estado = 'disponible' as any;
+      }
+
+      await ticket.save();
+      migrados++;
+      logger.info(`Ticket ${ticket._id}: ${oldEstado} -> ${ticket.estado}`);
+    }
+
+    logger.info(`✅ Migración completada: ${migrados} tickets actualizados`);
+
+    res.json({
+      message: 'Migración de estados completada',
+      tickets_migrados: migrados,
+      total_procesados: ticketsAntiguos.length
+    });
+  } catch (error: any) {
+    logger.error('Error en migrarEstadosTickets:', error);
+    res.status(500).json({ error: 'Error al migrar estados de tickets' });
+  }
+};

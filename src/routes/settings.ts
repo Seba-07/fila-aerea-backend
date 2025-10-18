@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getSettings, updateSettings, updateHoraPrevista, updateHoraPrevistaCircuito, iniciarVuelo, finalizarVuelo, getPrecioTicket, recalcularHorasCircuitos, generarManifiestosFaltantes } from '../controllers/settingsController';
+import { getSettings, updateSettings, updateHoraPrevista, updateHoraPrevistaCircuito, iniciarVuelo, finalizarVuelo, getPrecioTicket, recalcularHorasCircuitos, generarManifiestosFaltantes, migrarEstadosTickets } from '../controllers/settingsController';
 import { authenticate, requireStaff } from '../middlewares/auth';
 
 const router = Router();
@@ -12,6 +12,7 @@ router.get('/', authenticate, getSettings);
 router.patch('/', authenticate, requireStaff, updateSettings);
 router.post('/recalcular-horas-circuitos', authenticate, requireStaff, recalcularHorasCircuitos);
 router.post('/generar-manifiestos-faltantes', authenticate, requireStaff, generarManifiestosFaltantes);
+router.post('/migrar-estados-tickets', authenticate, requireStaff, migrarEstadosTickets);
 
 // Rutas de gestión de vuelos
 router.patch('/flights/:flightId/hora-prevista', authenticate, requireStaff, updateHoraPrevista);
