@@ -159,11 +159,36 @@ export const getPassengers = async (
           userId: p._id,
         });
 
+        // Obtener pagos del pasajero
+        const payments = await Payment.find({
+          userId: p._id,
+        }).sort({ fecha: 1 });
+
+        // Calcular monto total pagado
+        const totalPagado = payments.reduce((sum, payment) => {
+          if (payment.tipo === 'compra' || payment.tipo === 'ajuste_positivo') {
+            return sum + payment.monto;
+          } else if (payment.tipo === 'ajuste_negativo' || payment.tipo === 'devolucion') {
+            return sum - payment.monto;
+          }
+          return sum;
+        }, 0);
+
+        // Obtener el primer pago (compra inicial)
+        const pagoInicial = payments.find(p => p.tipo === 'compra');
+
         return {
           id: p._id,
           nombre: p.nombre,
           email: p.email,
           tickets_count: tickets.length,
+          total_pagado: totalPagado,
+          pago_inicial: pagoInicial ? {
+            id: pagoInicial._id,
+            monto: pagoInicial.monto,
+            metodo_pago: pagoInicial.metodo_pago,
+            fecha: pagoInicial.fecha,
+          } : null,
           tickets: tickets.map(t => ({
             id: t._id,
             codigo_ticket: t.codigo_ticket,
@@ -784,5 +809,76 @@ export const validateQR = async (
       valido: false,
       mensaje: 'Error al validar QR'
     });
+  }
+};
+
+// Actualizar monto del pago inicial de un pasajero
+export const updatePassengerPayment = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { passengerId } = req.params;
+    const { nuevo_monto, metodo_pago } = req.body;
+
+    if (!nuevo_monto || nuevo_monto < 0) {
+      res.status(400).json({ error: 'El monto debe ser mayor o igual a 0' });
+      return;
+    }
+
+    // Verificar que el pasajero existe
+    const user = await User.findById(passengerId);
+    if (!user || user.rol !== 'passenger') {
+      res.status(404).json({ error: 'Pasajero no encontrado' });
+      return;
+    }
+
+    // Buscar el pago inicial (tipo 'compra')
+    const pagoInicial = await Payment.findOne({
+      userId: passengerId,
+      tipo: 'compra',
+    });
+
+    if (!pagoInicial) {
+      res.status(404).json({ error: 'No se encontró el pago inicial del pasajero' });
+      return;
+    }
+
+    const montoAnterior = pagoInicial.monto;
+
+    // Actualizar el pago
+    pagoInicial.monto = nuevo_monto;
+    if (metodo_pago) {
+      pagoInicial.metodo_pago = metodo_pago;
+    }
+    await pagoInicial.save();
+
+    await EventLog.create({
+      type: 'payment_updated',
+      entity: 'payment',
+      entityId: String(pagoInicial._id),
+      userId: req.user?.userId,
+      payload: {
+        passengerId,
+        monto_anterior: montoAnterior,
+        monto_nuevo: nuevo_monto,
+        metodo_pago: pagoInicial.metodo_pago,
+      },
+    });
+
+    logger.info(`Pago inicial actualizado para pasajero ${passengerId}: $${montoAnterior} → $${nuevo_monto}`);
+
+    res.json({
+      message: 'Monto del pago actualizado exitosamente',
+      pago: {
+        id: pagoInicial._id,
+        monto_anterior: montoAnterior,
+        monto_nuevo: nuevo_monto,
+        metodo_pago: pagoInicial.metodo_pago,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error en updatePassengerPayment:', error);
+    res.status(500).json({ error: 'Error al actualizar el pago' });
   }
 };
