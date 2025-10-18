@@ -63,7 +63,7 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
 
         const tickets = await Ticket.find({
           flightId: vuelo._id,
-          estado: { $in: ['inscrito', 'asignado'] },
+          estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
         });
 
         const pasajeros = tickets
@@ -72,6 +72,7 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
             nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
             rut: t.pasajeros[0].rut || 'Sin RUT',
             esMenor: t.pasajeros[0].esMenor || false,
+            estado: t.estado,
           }));
 
         return {
