@@ -56,6 +56,9 @@ app.use(cookieParser());
 // Rate limiting
 app.use(globalLimiter);
 
+// Servir archivos estáticos (uploads)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Swagger docs
 try {
   const swaggerDocument = YAML.load(path.join(__dirname, '../docs/openapi.yaml'));

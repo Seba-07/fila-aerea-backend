@@ -534,3 +534,49 @@ export const rejectTimeChange = async (req: AuthRequest, res: Response): Promise
     res.status(500).json({ error: 'Error al rechazar cambio de hora' });
   }
 };
+
+// Subir autorización para menor
+export const uploadAutorizacion = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ticketId } = req.params;
+    const userId = req.user?.userId;
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No se ha subido ningún archivo' });
+      return;
+    }
+
+    // Verificar que el ticket existe y pertenece al usuario
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket no encontrado' });
+      return;
+    }
+
+    if (ticket.userId.toString() !== userId) {
+      res.status(403).json({ error: 'No tienes permiso para modificar este ticket' });
+      return;
+    }
+
+    // Verificar que el pasajero es menor
+    if (!ticket.pasajeros || ticket.pasajeros.length === 0 || !ticket.pasajeros[0].esMenor) {
+      res.status(400).json({ error: 'Este ticket no corresponde a un menor' });
+      return;
+    }
+
+    // Guardar la URL del archivo (en producción usarías S3, Cloudinary, etc.)
+    // Por ahora guardamos la ruta del archivo
+    const fileUrl = `/uploads/autorizaciones/${req.file.filename}`;
+    ticket.pasajeros[0].autorizacion_url = fileUrl;
+    await ticket.save();
+
+    res.json({
+      message: 'Autorización subida exitosamente',
+      url: fileUrl,
+      ticket
+    });
+  } catch (error: any) {
+    logger.error('Error en uploadAutorizacion:', error);
+    res.status(500).json({ error: 'Error al subir autorización' });
+  }
+};
