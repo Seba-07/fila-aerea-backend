@@ -17,6 +17,7 @@ export const getManifests = async (req: AuthRequest, res: Response): Promise<voi
         // Obtener todos los vuelos de el circuito
         const vuelosCircuito = await Flight.find({ numero_circuito: manifest.numero_circuito })
           .populate('aircraftId')
+          .populate('pilotId')
           .sort({ 'aircraftId.matricula': 1 });
 
         const { Ticket } = await import('../models');
@@ -68,6 +69,7 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
     // Obtener informaci�n detallada de los vuelos
     const vuelosCircuito = await Flight.find({ numero_circuito: parseInt(numeroCircuito) })
       .populate('aircraftId')
+      .populate('pilotId')
       .sort({ 'aircraftId.matricula': 1 });
 
     // Organizar pasajeros por vuelo
@@ -94,7 +96,10 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
           matricula: (vuelo.aircraftId as any)?.matricula,
           modelo: (vuelo.aircraftId as any)?.modelo,
           estado: vuelo.estado,
-          piloto_nombre: vuelo.piloto_nombre || 'Sin asignar',
+          piloto_nombre: (vuelo.pilotId as any)?.nombre || vuelo.piloto_nombre || 'Sin asignar',
+          piloto_licencia: (vuelo.pilotId as any)?.numero_licencia || 'N/A',
+          aerodromo_salida: vuelo.aerodromo_salida || 'SCST',
+          aerodromo_llegada: vuelo.aerodromo_llegada || 'SCST',
           pasajeros,
         };
       })

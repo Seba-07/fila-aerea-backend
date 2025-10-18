@@ -8,6 +8,7 @@ import pushRoutes from './push';
 import settingsRoutes from './settings';
 import manifestsRoutes from './manifests';
 import paymentRoutes from './payment';
+import pilotRoutes from './pilot';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/push', pushRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/manifests', manifestsRoutes);
 router.use('/payment', paymentRoutes);
+router.use('/pilots', pilotRoutes);
 
 export default router;

@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IFlight extends Document {
   aircraftId: Types.ObjectId;
+  pilotId?: Types.ObjectId;
   numero_circuito: number; // Previously: numero_tanda (renamed for database migration)
   fecha_hora: Date;
   hora_prevista_salida?: Date;
@@ -11,7 +12,9 @@ export interface IFlight extends Document {
   asientos_ocupados: number;
   estado: 'abierto' | 'en_vuelo' | 'finalizado' | 'reprogramado' | 'cancelado';
   razon_reprogramacion?: 'combustible' | 'meteorologia' | 'mantenimiento' | 'cancelacion_dia';
-  piloto_nombre?: string;
+  piloto_nombre?: string; // Deprecated: usar pilotId en su lugar
+  aerodromo_salida: string;
+  aerodromo_llegada: string;
   notas?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +26,10 @@ const flightSchema = new Schema<IFlight>(
       type: Schema.Types.ObjectId,
       ref: 'Aircraft',
       required: true,
+    },
+    pilotId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Pilot',
     },
     numero_circuito: {
       type: Number,
@@ -65,6 +72,18 @@ const flightSchema = new Schema<IFlight>(
       type: String,
       trim: true,
       maxlength: 100,
+    },
+    aerodromo_salida: {
+      type: String,
+      default: 'SCST',
+      trim: true,
+      maxlength: 10,
+    },
+    aerodromo_llegada: {
+      type: String,
+      default: 'SCST',
+      trim: true,
+      maxlength: 10,
     },
     notas: {
       type: String,

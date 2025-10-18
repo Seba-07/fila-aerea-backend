@@ -157,6 +157,7 @@ export const getFlights = async (req: AuthRequest, res: Response): Promise<void>
 
     const flights = await Flight.find(filter)
       .populate('aircraftId', 'matricula modelo capacidad')
+      .populate('pilotId', 'nombre numero_licencia')
       .sort({ fecha_hora: 1 })
       .lean();
 
