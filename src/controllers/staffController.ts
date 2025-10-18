@@ -588,6 +588,42 @@ export const getPayments = async (
   }
 };
 
+// Eliminar un pago
+export const deletePayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { paymentId } = req.params;
+
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      res.status(404).json({ error: 'Pago no encontrado' });
+      return;
+    }
+
+    // Registrar la eliminación en EventLog
+    const { EventLog } = await import('../models');
+    await EventLog.create({
+      tipo: 'pago_eliminado',
+      descripcion: `Pago eliminado: ${payment.tipo} de $${payment.monto} (${payment.metodo_pago})`,
+      userId: payment.userId,
+      metadata: {
+        paymentId: payment._id,
+        monto: payment.monto,
+        tipo: payment.tipo,
+        metodo_pago: payment.metodo_pago,
+        eliminadoPor: req.user?.userId,
+      },
+    });
+
+    await Payment.findByIdAndDelete(paymentId);
+
+    logger.info(`Pago ${paymentId} eliminado por usuario ${req.user?.userId}`);
+    res.json({ message: 'Pago eliminado correctamente' });
+  } catch (error: any) {
+    logger.error('Error en deletePayment:', error);
+    res.status(500).json({ error: 'Error al eliminar pago' });
+  }
+};
+
 // Crear nueva tanda o agregar aviones a tanda existente
 export const createCircuito = async (
   req: AuthRequest,

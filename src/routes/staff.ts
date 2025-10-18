@@ -9,6 +9,7 @@ import {
   updatePassengerPayment,
   deletePassenger,
   getPayments,
+  deletePayment,
   createCircuito,
   deleteCircuito,
   validateQR,
@@ -38,6 +39,7 @@ router.patch('/passengers/:passengerId/payment', authenticate, requireStaff, upd
 router.patch('/tickets/:ticketId/passengers', authenticate, requireStaff, updateTicketPassengers);
 router.delete('/passengers/:passengerId', authenticate, requireStaff, deletePassenger);
 router.get('/payments', authenticate, requireStaff, getPayments);
+router.delete('/payments/:paymentId', authenticate, requireStaff, deletePayment);
 
 // Circuitos
 router.post('/circuitos', authenticate, requireStaff, createCircuito);
