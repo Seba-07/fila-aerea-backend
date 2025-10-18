@@ -5,6 +5,7 @@ export interface IPasajero {
   apellido: string;
   rut: string;
   esMenor: boolean;
+  autorizacion_url?: string; // URL del PDF de autorización para menores
 }
 
 export interface ITicket extends Document {
@@ -58,6 +59,10 @@ const ticketSchema = new Schema<ITicket>(
         esMenor: {
           type: Boolean,
           default: false,
+        },
+        autorizacion_url: {
+          type: String,
+          trim: true,
         },
       },
     ],

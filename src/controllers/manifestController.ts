@@ -19,13 +19,27 @@ export const getManifests = async (req: AuthRequest, res: Response): Promise<voi
           .populate('aircraftId')
           .sort({ 'aircraftId.matricula': 1 });
 
+        const { Ticket } = await import('../models');
+
+        const vuelosConPasajeros = await Promise.all(
+          vuelosCircuito.map(async (v) => {
+            const ticketsCount = await Ticket.countDocuments({
+              flightId: v._id,
+              estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
+            });
+
+            return {
+              matricula: (v.aircraftId as any)?.matricula,
+              modelo: (v.aircraftId as any)?.modelo,
+              estado: v.estado,
+              pasajeros: Array(ticketsCount), // Array vacío con la longitud correcta
+            };
+          })
+        );
+
         return {
           ...manifest.toObject(),
-          vuelos: vuelosCircuito.map(v => ({
-            matricula: (v.aircraftId as any)?.matricula,
-            modelo: (v.aircraftId as any)?.modelo,
-            estado: v.estado,
-          })),
+          vuelos: vuelosConPasajeros,
         };
       })
     );
@@ -72,6 +86,7 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
             nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
             rut: t.pasajeros[0].rut || 'Sin RUT',
             esMenor: t.pasajeros[0].esMenor || false,
+            autorizacion_url: t.pasajeros[0].autorizacion_url || null,
             estado: t.estado,
           }));
 
