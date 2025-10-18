@@ -3,60 +3,120 @@ import { AuthRequest } from '../middlewares/auth';
 import { FlightManifest, Flight } from '../models';
 import { logger } from '../utils/logger';
 
-// Listar todos los manifiestos
+// Listar todos los manifiestos (uno por vuelo)
 export const getManifests = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const manifests = await FlightManifest.find()
       .populate('flightId')
       .populate('createdBy', 'nombre apellido email')
-      .sort({ numero_circuito: -1 });
+      .sort({ numero_circuito: -1, createdAt: -1 });
 
-    // Enriquecer con informaci�n de los vuelos de cada tanda
-    const manifestsConVuelos = await Promise.all(
+    const { Ticket } = await import('../models');
+
+    // Enriquecer cada manifiesto con información del vuelo
+    const manifestsEnriquecidos = await Promise.all(
       manifests.map(async (manifest) => {
-        // Obtener todos los vuelos de el circuito
-        const vuelosCircuito = await Flight.find({ numero_circuito: manifest.numero_circuito })
-          .populate('aircraftId')
-          .populate('pilotId')
-          .sort({ 'aircraftId.matricula': 1 });
+        const flight = manifest.flightId as any;
 
-        const { Ticket } = await import('../models');
+        if (!flight) {
+          return manifest.toObject();
+        }
 
-        const vuelosConPasajeros = await Promise.all(
-          vuelosCircuito.map(async (v) => {
-            const ticketsCount = await Ticket.countDocuments({
-              flightId: v._id,
-              estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
-            });
+        // Poblar aircraft y pilot si no están poblados
+        await flight.populate('aircraftId');
+        await flight.populate('pilotId');
 
-            return {
-              matricula: (v.aircraftId as any)?.matricula,
-              modelo: (v.aircraftId as any)?.modelo,
-              estado: v.estado,
-              pasajeros: Array(ticketsCount), // Array vacío con la longitud correcta
-            };
-          })
-        );
+        const ticketsCount = await Ticket.countDocuments({
+          flightId: flight._id,
+          estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
+        });
 
         return {
           ...manifest.toObject(),
-          vuelos: vuelosConPasajeros,
+          vuelo: {
+            flightId: flight._id,
+            matricula: flight.aircraftId?.matricula,
+            modelo: flight.aircraftId?.modelo,
+            estado: flight.estado,
+            piloto_nombre: flight.pilotId?.nombre || flight.piloto_nombre || 'Sin asignar',
+            piloto_licencia: flight.pilotId?.numero_licencia || 'N/A',
+            pasajeros_count: ticketsCount,
+          },
         };
       })
     );
 
-    res.json(manifestsConVuelos);
+    res.json(manifestsEnriquecidos);
   } catch (error: any) {
     logger.error('Error en getManifests:', error);
     res.status(500).json({ error: 'Error al obtener manifiestos' });
   }
 };
 
-// Obtener un manifiesto espec�fico por tanda
+// Obtener un manifiesto específico por flightId
+export const getManifestByFlight = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { flightId } = req.params;
+
+    const manifest = await FlightManifest.findOne({ flightId })
+      .populate('flightId')
+      .populate('createdBy', 'nombre apellido email');
+
+    if (!manifest) {
+      res.status(404).json({ error: 'Manifiesto no encontrado' });
+      return;
+    }
+
+    const flight = manifest.flightId as any;
+    await flight.populate('aircraftId');
+    await flight.populate('pilotId');
+
+    const { Ticket } = await import('../models');
+
+    const tickets = await Ticket.find({
+      flightId: flight._id,
+      estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
+    });
+
+    const pasajeros = tickets
+      .filter(t => t.pasajeros && t.pasajeros.length > 0)
+      .map(t => ({
+        nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
+        rut: t.pasajeros[0].rut || 'Sin RUT',
+        esMenor: t.pasajeros[0].esMenor || false,
+        autorizacion_url: t.pasajeros[0].autorizacion_url || null,
+        estado: t.estado,
+      }));
+
+    const vueloDetalle = {
+      flightId: flight._id,
+      matricula: flight.aircraftId?.matricula,
+      modelo: flight.aircraftId?.modelo,
+      estado: flight.estado,
+      piloto_nombre: flight.pilotId?.nombre || flight.piloto_nombre || 'Sin asignar',
+      piloto_licencia: flight.pilotId?.numero_licencia || 'N/A',
+      pilotId: flight.pilotId?._id || null,
+      aerodromo_salida: flight.aerodromo_salida || 'SCST',
+      aerodromo_llegada: flight.aerodromo_llegada || 'SCST',
+      pasajeros,
+    };
+
+    res.json({
+      ...manifest.toObject(),
+      vuelo: vueloDetalle,
+    });
+  } catch (error: any) {
+    logger.error('Error en getManifestByFlight:', error);
+    res.status(500).json({ error: 'Error al obtener manifiesto' });
+  }
+};
+
+// DEPRECATED: Mantener por compatibilidad, usar getManifestByFlight
 export const getManifestByCircuito = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { numeroCircuito } = req.params;
 
+    // Buscar el primer manifiesto del circuito
     const manifest = await FlightManifest.findOne({ numero_circuito: parseInt(numeroCircuito) })
       .populate('flightId')
       .populate('createdBy', 'nombre apellido email');
@@ -66,51 +126,9 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    // Obtener informaci�n detallada de los vuelos
-    const vuelosCircuito = await Flight.find({ numero_circuito: parseInt(numeroCircuito) })
-      .populate('aircraftId')
-      .populate('pilotId')
-      .sort({ 'aircraftId.matricula': 1 });
-
-    // Organizar pasajeros por vuelo
-    const vuelosConPasajeros = await Promise.all(
-      vuelosCircuito.map(async (vuelo) => {
-        const { Ticket } = await import('../models');
-
-        const tickets = await Ticket.find({
-          flightId: vuelo._id,
-          estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
-        });
-
-        const pasajeros = tickets
-          .filter(t => t.pasajeros && t.pasajeros.length > 0)
-          .map(t => ({
-            nombre: `${t.pasajeros[0].nombre} ${t.pasajeros[0].apellido}`,
-            rut: t.pasajeros[0].rut || 'Sin RUT',
-            esMenor: t.pasajeros[0].esMenor || false,
-            autorizacion_url: t.pasajeros[0].autorizacion_url || null,
-            estado: t.estado,
-          }));
-
-        return {
-          flightId: vuelo._id,
-          matricula: (vuelo.aircraftId as any)?.matricula,
-          modelo: (vuelo.aircraftId as any)?.modelo,
-          estado: vuelo.estado,
-          piloto_nombre: (vuelo.pilotId as any)?.nombre || vuelo.piloto_nombre || 'Sin asignar',
-          piloto_licencia: (vuelo.pilotId as any)?.numero_licencia || 'N/A',
-          pilotId: vuelo.pilotId?._id || null,
-          aerodromo_salida: vuelo.aerodromo_salida || 'SCST',
-          aerodromo_llegada: vuelo.aerodromo_llegada || 'SCST',
-          pasajeros,
-        };
-      })
-    );
-
-    res.json({
-      ...manifest.toObject(),
-      vuelos: vuelosConPasajeros,
-    });
+    // Redirigir al nuevo formato
+    req.params.flightId = (manifest.flightId as any)._id.toString();
+    return getManifestByFlight(req, res);
   } catch (error: any) {
     logger.error('Error en getManifestByCircuito:', error);
     res.status(500).json({ error: 'Error al obtener manifiesto' });
