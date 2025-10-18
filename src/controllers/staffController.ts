@@ -852,10 +852,6 @@ export const validateQR = async (
       return;
     }
 
-    // Cambiar estado del ticket a "embarcado"
-    ticket.estado = 'embarcado';
-    await ticket.save();
-
     // Registrar evento de validación exitosa
     await EventLog.create({
       type: 'qr_validated',
@@ -870,7 +866,7 @@ export const validateQR = async (
       },
     });
 
-    logger.info(`✅ QR validado: ticket ${codigo} para vuelo ${flightId} - Estado cambiado a embarcado`);
+    logger.info(`✅ QR validado: ticket ${codigo} para vuelo ${flightId}`);
 
     res.json({
       valido: true,
@@ -878,7 +874,7 @@ export const validateQR = async (
       ticket: {
         codigo: ticket.codigo_ticket,
         pasajero: ticket.pasajeros?.[0] || null,
-        estado: 'embarcado'
+        estado: ticket.estado
       },
       flight: {
         numero_circuito: flight.numero_circuito,
