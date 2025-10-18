@@ -452,6 +452,14 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
     // Actualizar hora de aterrizaje en el manifiesto
     await actualizarHoraAterrizajeManifiesto(flight.numero_circuito, horaAterrizaje);
 
+    // Actualizar estado de tickets a 'volado'
+    const { Ticket } = await import('../models');
+    const result = await Ticket.updateMany(
+      { flightId: flight._id, estado: { $in: ['inscrito', 'embarcado'] } },
+      { $set: { estado: 'volado' } }
+    );
+    logger.info(`✅ ${result.modifiedCount} tickets actualizados a estado 'volado'`);
+
     logger.info(`✈️ Vuelo ${(flight.aircraftId as any)?.matricula} finalizado (tanda ${flight.numero_circuito})`);
 
     // Verificar si este es el último vuelo de la circuitoen finalizar
