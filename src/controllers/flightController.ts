@@ -296,6 +296,16 @@ export const updateFlight = async (
       logger.info(`Hora de aterrizaje sincronizada en manifiesto para vuelo ${flight._id}`);
     }
 
+    // Si se actualizó hora_inicio_vuelo, sincronizar con el manifiesto
+    if (updates.hora_inicio_vuelo) {
+      const { FlightManifest } = await import('../models');
+      await FlightManifest.findOneAndUpdate(
+        { flightId: flight._id },
+        { $set: { hora_despegue: updates.hora_inicio_vuelo } }
+      );
+      logger.info(`Hora de despegue sincronizada en manifiesto para vuelo ${flight._id}`);
+    }
+
     await EventLog.create({
       type: 'flight_updated',
       entity: 'flight',
