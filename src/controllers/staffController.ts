@@ -602,15 +602,15 @@ export const deletePayment = async (req: AuthRequest, res: Response): Promise<vo
     // Registrar la eliminación en EventLog
     const { EventLog } = await import('../models');
     await EventLog.create({
-      tipo: 'pago_eliminado',
-      descripcion: `Pago eliminado: ${payment.tipo} de $${payment.monto} (${payment.metodo_pago})`,
-      userId: payment.userId,
-      metadata: {
-        paymentId: payment._id,
+      type: 'payment_deleted',
+      entity: 'payment',
+      entityId: String(payment._id),
+      userId: req.user?.userId,
+      payload: {
+        passengerId: String(payment.userId),
         monto: payment.monto,
         tipo: payment.tipo,
         metodo_pago: payment.metodo_pago,
-        eliminadoPor: req.user?.userId,
       },
     });
 
