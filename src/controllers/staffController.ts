@@ -218,8 +218,8 @@ export const getPassengersWithoutFlight = async (
       $or: [
         { flightId: { $exists: false } },
         { flightId: null },
-        { estado: 'disponible' },
-      ]
+      ],
+      estado: { $in: ['disponible', 'asignado'] }
     }).populate('userId');
 
     // Agrupar por usuario
