@@ -151,8 +151,8 @@ export const getFlights = async (req: AuthRequest, res: Response): Promise<void>
         filter.estado = estado;
       }
     } else {
-      // Por defecto mostrar vuelos abiertos y en vuelo (no finalizados ni reprogramados)
-      filter.estado = { $in: ['abierto', 'en_vuelo'] };
+      // Por defecto mostrar vuelos activos (abierto, en_vuelo, finalizado) - no mostrar reprogramados ni cancelados
+      filter.estado = { $in: ['abierto', 'en_vuelo', 'finalizado'] };
     }
 
     const flights = await Flight.find(filter)

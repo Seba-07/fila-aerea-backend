@@ -93,11 +93,13 @@ export const getManifestByCircuito = async (req: AuthRequest, res: Response): Pr
           }));
 
         return {
+          flightId: vuelo._id,
           matricula: (vuelo.aircraftId as any)?.matricula,
           modelo: (vuelo.aircraftId as any)?.modelo,
           estado: vuelo.estado,
           piloto_nombre: (vuelo.pilotId as any)?.nombre || vuelo.piloto_nombre || 'Sin asignar',
           piloto_licencia: (vuelo.pilotId as any)?.numero_licencia || 'N/A',
+          pilotId: vuelo.pilotId?._id || null,
           aerodromo_salida: vuelo.aerodromo_salida || 'SCST',
           aerodromo_llegada: vuelo.aerodromo_llegada || 'SCST',
           pasajeros,
