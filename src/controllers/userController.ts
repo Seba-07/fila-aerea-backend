@@ -13,10 +13,10 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
-    // Obtener todos los tickets del usuario
+    // Obtener todos los tickets del usuario (excepto cancelados)
     const tickets = await Ticket.find({
       userId: user._id,
-      estado: { $in: ['disponible', 'asignado', 'inscrito'] },
+      estado: { $in: ['disponible', 'asignado', 'inscrito', 'embarcado', 'volado'] },
     }).sort({ createdAt: 1 });
 
     res.json({
