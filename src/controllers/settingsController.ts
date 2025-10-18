@@ -360,28 +360,27 @@ export const iniciarVuelo = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
-// Generar manifiesto para una circuitocompleta
+// Generar manifiesto individual para cada vuelo del circuito
 const generarManifiestoCircuito = async (numeroCircuito: number, userId: string) => {
   try {
     const { FlightManifest, Ticket } = await import('../models');
 
-    // Verificar si ya existe un manifiesto para esta tanda
-    const existente = await FlightManifest.findOne({ numero_circuito: numeroCircuito });
-    if (existente) {
-      logger.info(`Manifiesto ya existe para circuito${numeroCircuito}`);
-      return;
-    }
-
-    // Obtener todos los vuelos de el circuito
+    // Obtener todos los vuelos del circuito
     const vuelosCircuito = await Flight.find({ numero_circuito: numeroCircuito })
       .populate('aircraftId')
       .sort({ 'aircraftId.matricula': 1 });
 
     if (vuelosCircuito.length === 0) return;
 
-    // Para cada vuelo, obtener los pasajeros inscritos
-    const manifiestosPorVuelo = [];
+    // Crear un manifiesto para cada vuelo individual
     for (const vuelo of vuelosCircuito) {
+      // Verificar si ya existe un manifiesto para este vuelo
+      const existente = await FlightManifest.findOne({ flightId: vuelo._id });
+      if (existente) {
+        logger.info(`Manifiesto ya existe para vuelo ${vuelo._id} (${(vuelo.aircraftId as any)?.matricula})`);
+        continue;
+      }
+
       // Buscar tickets inscritos o asignados a este vuelo
       const tickets = await Ticket.find({
         flightId: vuelo._id,
@@ -401,28 +400,18 @@ const generarManifiestoCircuito = async (numeroCircuito: number, userId: string)
 
       logger.info(`Vuelo ${vuelo._id}: ${pasajeros.length} pasajeros con datos`);
 
-      manifiestosPorVuelo.push({
+      // Crear manifiesto individual para este vuelo
+      await FlightManifest.create({
         flightId: vuelo._id,
-        matricula: (vuelo.aircraftId as any).matricula,
-        modelo: (vuelo.aircraftId as any).modelo,
-        pasajeros,
+        numero_circuito: numeroCircuito,
+        pasajeros: pasajeros,
+        fecha_vuelo: vuelo.fecha_hora,
+        hora_despegue: vuelo.hora_inicio_vuelo || new Date(),
+        createdBy: userId,
       });
+
+      logger.info(`✅ Manifiesto creado para vuelo ${vuelo._id} (${(vuelo.aircraftId as any)?.matricula}) con ${pasajeros.length} pasajeros`);
     }
-
-    // Crear un manifiesto para el primer vuelo de la circuito(representando toda el circuito)
-    const primerVuelo = vuelosCircuito[0];
-    const todosLosPasajeros = manifiestosPorVuelo.flatMap(m => m.pasajeros);
-
-    await FlightManifest.create({
-      flightId: primerVuelo._id,
-      numero_circuito: numeroCircuito,
-      pasajeros: todosLosPasajeros,
-      fecha_vuelo: primerVuelo.fecha_hora,
-      hora_despegue: primerVuelo.hora_inicio_vuelo || new Date(),
-      createdBy: userId,
-    });
-
-    logger.info(`✅ Manifiesto creado para circuito${numeroCircuito} con ${todosLosPasajeros.length} pasajeros total`);
   } catch (error) {
     logger.error('Error generando manifiesto:', error);
   }
