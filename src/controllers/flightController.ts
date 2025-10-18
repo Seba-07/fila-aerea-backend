@@ -289,38 +289,50 @@ export const updateFlight = async (
     // Si se actualizó hora_arribo, sincronizar con el manifiesto
     if (updates.hora_arribo !== undefined) {
       const { FlightManifest } = await import('../models');
-      if (updates.hora_arribo === null || updates.hora_arribo === '') {
-        // Eliminar hora de aterrizaje del manifiesto
-        await FlightManifest.findOneAndUpdate(
-          { flightId: flight._id },
-          { $unset: { hora_aterrizaje: '' } }
-        );
-        logger.info(`Hora de aterrizaje eliminada del manifiesto para vuelo ${flight._id}`);
+      const manifest = await FlightManifest.findOne({ flightId: flight._id });
+
+      if (manifest) {
+        if (updates.hora_arribo === null || updates.hora_arribo === '') {
+          // Eliminar hora de aterrizaje del manifiesto
+          await FlightManifest.findOneAndUpdate(
+            { flightId: flight._id },
+            { $unset: { hora_aterrizaje: '' } }
+          );
+          logger.info(`Hora de aterrizaje eliminada del manifiesto para vuelo ${flight._id}`);
+        } else {
+          await FlightManifest.findOneAndUpdate(
+            { flightId: flight._id },
+            { $set: { hora_aterrizaje: updates.hora_arribo } }
+          );
+          logger.info(`Hora de aterrizaje sincronizada en manifiesto para vuelo ${flight._id}`);
+        }
       } else {
-        await FlightManifest.findOneAndUpdate(
-          { flightId: flight._id },
-          { $set: { hora_aterrizaje: updates.hora_arribo } }
-        );
-        logger.info(`Hora de aterrizaje sincronizada en manifiesto para vuelo ${flight._id}`);
+        logger.warn(`No se encontró manifiesto para vuelo ${flight._id}, no se puede sincronizar hora_aterrizaje`);
       }
     }
 
     // Si se actualizó hora_inicio_vuelo, sincronizar con el manifiesto
     if (updates.hora_inicio_vuelo !== undefined) {
       const { FlightManifest } = await import('../models');
-      if (updates.hora_inicio_vuelo === null || updates.hora_inicio_vuelo === '') {
-        // Eliminar hora de despegue del manifiesto
-        await FlightManifest.findOneAndUpdate(
-          { flightId: flight._id },
-          { $unset: { hora_despegue: '' } }
-        );
-        logger.info(`Hora de despegue eliminada del manifiesto para vuelo ${flight._id}`);
+      const manifest = await FlightManifest.findOne({ flightId: flight._id });
+
+      if (manifest) {
+        if (updates.hora_inicio_vuelo === null || updates.hora_inicio_vuelo === '') {
+          // Eliminar hora de despegue del manifiesto
+          await FlightManifest.findOneAndUpdate(
+            { flightId: flight._id },
+            { $unset: { hora_despegue: '' } }
+          );
+          logger.info(`Hora de despegue eliminada del manifiesto para vuelo ${flight._id}`);
+        } else {
+          await FlightManifest.findOneAndUpdate(
+            { flightId: flight._id },
+            { $set: { hora_despegue: updates.hora_inicio_vuelo } }
+          );
+          logger.info(`Hora de despegue sincronizada en manifiesto para vuelo ${flight._id}`);
+        }
       } else {
-        await FlightManifest.findOneAndUpdate(
-          { flightId: flight._id },
-          { $set: { hora_despegue: updates.hora_inicio_vuelo } }
-        );
-        logger.info(`Hora de despegue sincronizada en manifiesto para vuelo ${flight._id}`);
+        logger.warn(`No se encontró manifiesto para vuelo ${flight._id}, no se puede sincronizar hora_despegue`);
       }
     }
 
