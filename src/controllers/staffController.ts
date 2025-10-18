@@ -728,6 +728,15 @@ export const validateQR = async (
       return;
     }
 
+    // Verificar que el circuito del QR coincide con el circuito del vuelo
+    if (circuito && flight.numero_circuito !== circuito) {
+      res.status(400).json({
+        valido: false,
+        mensaje: `Este pasajero pertenece al circuito ${flight.numero_circuito}, no al circuito ${circuito}`
+      });
+      return;
+    }
+
     if (flight.estado !== 'abierto' && flight.estado !== 'en_vuelo') {
       res.status(400).json({
         valido: false,
