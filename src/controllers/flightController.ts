@@ -165,7 +165,7 @@ export const getFlights = async (req: AuthRequest, res: Response): Promise<void>
       flights.map(async (flight) => {
         const tickets = await Ticket.find({
           flightId: flight._id,
-          estado: { $in: ['asignado', 'inscrito', 'volado'] }
+          estado: { $in: ['asignado', 'inscrito', 'embarcado', 'volado'] }
         }).populate('userId', 'nombre email');
 
         const pasajeros = tickets.map(t => ({
