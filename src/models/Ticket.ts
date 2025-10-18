@@ -13,7 +13,7 @@ export interface ITicket extends Document {
   codigo_ticket: string;
   pasajeros: IPasajero[];
   flightId?: Types.ObjectId;
-  estado: 'disponible' | 'asignado' | 'inscrito' | 'embarcado' | 'volado' | 'cancelado';
+  estado: 'disponible' | 'inscrito' | 'volado';
   reprogramacion_pendiente?: {
     nuevo_flightId: Types.ObjectId;
     numero_circuito_anterior: number; // Previously: numero_tanda_anterior
@@ -72,7 +72,7 @@ const ticketSchema = new Schema<ITicket>(
     },
     estado: {
       type: String,
-      enum: ['disponible', 'asignado', 'inscrito', 'embarcado', 'volado', 'cancelado'],
+      enum: ['disponible', 'inscrito', 'volado'],
       default: 'disponible',
     },
     reprogramacion_pendiente: {

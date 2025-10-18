@@ -28,7 +28,7 @@ export const getManifests = async (req: AuthRequest, res: Response): Promise<voi
 
         const ticketsCount = await Ticket.countDocuments({
           flightId: flight._id,
-          estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
+          estado: { $eq: 'inscrito' },
         });
 
         return {
@@ -75,7 +75,7 @@ export const getManifestByFlight = async (req: AuthRequest, res: Response): Prom
 
     const tickets = await Ticket.find({
       flightId: flight._id,
-      estado: { $in: ['inscrito', 'embarcado', 'asignado'] },
+      estado: { $eq: 'inscrito' },
     });
 
     const pasajeros = tickets

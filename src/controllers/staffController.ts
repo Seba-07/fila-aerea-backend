@@ -93,7 +93,7 @@ export const registerPassenger = async (
         userId: user._id,
         codigo_ticket,
         pasajeros: pasajeroInfo,
-        estado: pasajeroInfo.length > 0 && flightId ? 'asignado' : 'disponible',
+        estado: pasajeroInfo.length > 0 && flightId ? 'inscrito' : 'disponible',
         flightId: pasajeroInfo.length > 0 && flightId ? flightId : undefined,
       });
     }
@@ -161,7 +161,7 @@ export const getPassengers = async (
     const updateResult = await Ticket.updateMany(
       {
         flightId: { $in: idsVuelosFinalizados },
-        estado: { $in: ['asignado', 'inscrito', 'embarcado'] }
+        estado: 'inscrito'
       },
       { $set: { estado: 'volado' } }
     );
@@ -238,7 +238,7 @@ export const getPassengersWithoutFlight = async (
         { flightId: { $exists: false } },
         { flightId: null },
       ],
-      estado: { $in: ['disponible', 'asignado'] }
+      estado: 'disponible'
     }).populate('userId');
 
     // Agrupar por usuario
@@ -423,14 +423,8 @@ export const updateTicketPassengers = async (
       esMenor: p.esMenor || false,
     }));
 
-    // Si el ticket tenía pasajeros y ahora no tiene, cambiar estado a disponible
-    if (pasajeros.length === 0 && ticket.estado === 'asignado') {
-      ticket.estado = 'disponible';
-    }
-    // Si el ticket no tenía pasajeros y ahora tiene, cambiar a asignado
-    else if (pasajeros.length > 0 && ticket.estado === 'disponible') {
-      ticket.estado = 'asignado';
-    }
+    // El estado se mantiene según el vuelo: si tiene flightId es 'inscrito', sino 'disponible'
+    // No cambiamos el estado aquí, solo los datos de pasajeros
 
     await ticket.save();
 

@@ -381,10 +381,10 @@ const generarManifiestoCircuito = async (numeroCircuito: number, userId: string)
         continue;
       }
 
-      // Buscar tickets inscritos o asignados a este vuelo
+      // Buscar tickets inscritos a este vuelo
       const tickets = await Ticket.find({
         flightId: vuelo._id,
-        estado: { $in: ['inscrito', 'asignado'] },
+        estado: 'inscrito',
       }).populate('userId');
 
       logger.info(`Vuelo ${vuelo._id} (${(vuelo.aircraftId as any)?.matricula}): ${tickets.length} tickets encontrados`);
@@ -455,7 +455,7 @@ export const finalizarVuelo = async (req: AuthRequest, res: Response): Promise<v
     // Actualizar estado de tickets a 'volado'
     const { Ticket } = await import('../models');
     const result = await Ticket.updateMany(
-      { flightId: flight._id, estado: { $in: ['inscrito', 'embarcado'] } },
+      { flightId: flight._id, estado: 'inscrito' },
       { $set: { estado: 'volado' } }
     );
     logger.info(`✅ ${result.modifiedCount} tickets actualizados a estado 'volado'`);
@@ -644,7 +644,7 @@ export const generarManifiestosFaltantes = async (req: AuthRequest, res: Respons
       // Buscar tickets del vuelo
       const tickets = await Ticket.find({
         flightId: vuelo._id,
-        estado: { $in: ['inscrito', 'asignado', 'embarcado', 'volado'] },
+        estado: { $in: ['inscrito', 'volado'] },
       }).populate('userId');
 
       const pasajeros = tickets

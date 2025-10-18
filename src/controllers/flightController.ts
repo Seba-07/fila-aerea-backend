@@ -166,7 +166,7 @@ export const getFlights = async (req: AuthRequest, res: Response): Promise<void>
       flights.map(async (flight) => {
         const tickets = await Ticket.find({
           flightId: flight._id,
-          estado: { $in: ['asignado', 'inscrito', 'embarcado', 'volado'] }
+          estado: { $in: ['inscrito', 'volado'] }
         }).populate('userId', 'nombre email');
 
         const pasajeros = tickets.map(t => ({
@@ -520,7 +520,7 @@ export const rescheduleFlightToNextCircuito = async (
       // Mover también los pasajeros de ese vuelo (si los hay)
       const ticketsDesplazados = await Ticket.find({
         flightId: oldFlightId,
-        estado: { $in: ['asignado', 'inscrito'] },
+        estado: { $eq: 'inscrito' },
       }).populate('userId');
 
       // Mover automáticamente a los pasajeros desplazados
@@ -606,7 +606,7 @@ export const rescheduleFlightToNextCircuito = async (
     const { Ticket } = await import('../models');
     const ticketsAfectados = await Ticket.find({
       flightId: flight._id,
-      estado: { $in: ['asignado', 'inscrito'] },
+      estado: { $eq: 'inscrito' },
     }).populate('userId');
 
     // Con el efecto dominó, siempre hay espacio porque movemos el vuelo que obstruía
@@ -776,7 +776,7 @@ export const cancelAircraftForDay = async (
     for (const futFlight of futureFlights) {
       const ticketsAfectados = await Ticket.find({
         flightId: futFlight._id,
-        estado: { $in: ['asignado', 'inscrito'] },
+        estado: { $eq: 'inscrito' },
       }).populate('userId');
 
       // Liberar tickets

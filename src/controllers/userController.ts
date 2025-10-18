@@ -16,7 +16,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
     // Obtener todos los tickets del usuario (excepto cancelados)
     const tickets = await Ticket.find({
       userId: user._id,
-      estado: { $in: ['disponible', 'asignado', 'inscrito', 'embarcado', 'volado'] },
+      estado: { $in: ['disponible', 'inscrito', 'volado'] },
     }).sort({ createdAt: 1 });
 
     res.json({
@@ -73,12 +73,7 @@ export const updateTicket = async (req: AuthRequest, res: Response): Promise<voi
 
       // Si se asigna un vuelo, cambiar estado a inscrito e incrementar asientos
       if (flightId) {
-        // Si tiene pasajeros, estado 'inscrito', sino 'asignado'
-        if (ticket.pasajeros && ticket.pasajeros.length > 0) {
-          ticket.estado = 'inscrito';
-        } else {
-          ticket.estado = 'asignado';
-        }
+        ticket.estado = 'inscrito';
 
         // Incrementar asientos ocupados del nuevo vuelo (solo si es un cambio nuevo)
         if (!oldFlightId || oldFlightId.toString() !== flightId) {
@@ -88,12 +83,8 @@ export const updateTicket = async (req: AuthRequest, res: Response): Promise<voi
           });
         }
       } else {
-        // Si se elimina el vuelo, volver a disponible o asignado según tenga pasajeros
-        if (ticket.pasajeros && ticket.pasajeros.length > 0) {
-          ticket.estado = 'asignado';
-        } else {
-          ticket.estado = 'disponible';
-        }
+        // Si se elimina el vuelo, volver a disponible
+        ticket.estado = 'disponible';
       }
     }
 

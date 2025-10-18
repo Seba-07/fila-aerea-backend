@@ -266,7 +266,7 @@ export const confirmarPago = async (req: Request, res: Response): Promise<void> 
           userId: user._id,
           codigo_ticket: `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
           pasajeros: [pasajero],
-          estado: pasajeroFlightId ? 'asignado' : 'disponible',
+          estado: pasajeroFlightId ? 'inscrito' : 'disponible',
           flightId: pasajeroFlightId || undefined,
         });
         ticketIds.push(ticket._id);
