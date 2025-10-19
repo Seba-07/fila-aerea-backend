@@ -15,6 +15,7 @@ export interface ITicket extends Document {
   pasajeros: IPasajero[];
   flightId?: Types.ObjectId;
   estado: 'disponible' | 'inscrito' | 'volado' | 'cancelado';
+  bloqueado?: boolean; // Ticket comprado para bloquear asiento sin pasajero
   reprogramacion_pendiente?: {
     nuevo_flightId: Types.ObjectId;
     numero_circuito_anterior: number; // Previously: numero_tanda_anterior
@@ -79,6 +80,10 @@ const ticketSchema = new Schema<ITicket>(
       type: String,
       enum: ['disponible', 'inscrito', 'volado', 'cancelado'],
       default: 'disponible',
+    },
+    bloqueado: {
+      type: Boolean,
+      default: false,
     },
     reprogramacion_pendiente: {
       nuevo_flightId: {

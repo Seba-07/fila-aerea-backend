@@ -342,7 +342,7 @@ export const updatePassengerTickets = async (
 ): Promise<void> => {
   try {
     const { passengerId } = req.params;
-    const { cantidad_tickets, monto_ajuste, metodo_pago } = req.body;
+    const { cantidad_tickets, monto_ajuste, metodo_pago, tickets_bloqueados } = req.body;
 
     if (cantidad_tickets === undefined || cantidad_tickets < 0 || cantidad_tickets > 20) {
       res.status(400).json({
@@ -350,6 +350,9 @@ export const updatePassengerTickets = async (
       });
       return;
     }
+
+    // tickets_bloqueados indica cuántos de los nuevos tickets deben ser bloqueados (sin pasajero)
+    const numTicketsBloqueados = tickets_bloqueados || 0;
 
     const user = await User.findById(passengerId);
     if (!user || user.rol !== 'passenger') {
@@ -368,24 +371,32 @@ export const updatePassengerTickets = async (
       for (let i = 1; i <= diferencia; i++) {
         const random = Math.random().toString(36).substr(2, 4).toUpperCase();
         const codigo_ticket = `TKT-${baseTimestamp}-${i}-${random}`;
+        // Los últimos numTicketsBloqueados tickets se marcan como bloqueados
+        const esBloqueado = i > (diferencia - numTicketsBloqueados);
         newTickets.push({
           userId: passengerId,
           codigo_ticket,
           pasajeros: [],
           estado: 'disponible',
+          bloqueado: esBloqueado,
         });
       }
       await Ticket.insertMany(newTickets);
 
       // Registrar ajuste positivo si hay monto
       if (monto_ajuste && monto_ajuste > 0) {
+        const ticketsNormales = diferencia - numTicketsBloqueados;
+        const descripcion = numTicketsBloqueados > 0
+          ? `Agregados ${ticketsNormales} ticket(s) con pasajero y ${numTicketsBloqueados} ticket(s) bloqueado(s)`
+          : `Agregados ${diferencia} ticket(s)`;
+
         await Payment.create({
           userId: passengerId,
           monto: monto_ajuste,
           metodo_pago: metodo_pago || 'efectivo',
           cantidad_tickets: diferencia,
           tipo: 'ajuste_positivo',
-          descripcion: `Agregados ${diferencia} tickets`,
+          descripcion,
         });
       }
     } else if (diferencia < 0) {
