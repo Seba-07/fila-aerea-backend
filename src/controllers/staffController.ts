@@ -55,7 +55,8 @@ export const registerPassenger = async (
     }
 
     // Verificar si el email ya existe
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const emailLower = email.toLowerCase().trim();
+    const existingUser = await User.findOne({ email: emailLower });
     if (existingUser) {
       res.status(400).json({ error: 'El email ya está registrado' });
       return;
@@ -66,7 +67,7 @@ export const registerPassenger = async (
       nombre,
       apellido,
       rut: rut || undefined,
-      email: email.toLowerCase(),
+      email: emailLower,
       verificado: true,
       rol: 'passenger',
     });

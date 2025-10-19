@@ -14,8 +14,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const emailLower = email.toLowerCase();
+    const emailLower = email.toLowerCase().trim();
     const STAFF_EMAIL = 'staff@cac.cl';
+
+    logger.info(`Intento de login con email: "${emailLower}"`);
 
     // TEMPORALMENTE DESHABILITADO: Validación de contraseña para staff
     // TODO: Reactivar cuando se confirme que el login funciona
@@ -44,9 +46,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const user = await User.findOne({ email: emailLower });
 
     if (!user) {
+      logger.warn(`Usuario no encontrado para email: "${emailLower}"`);
+      // Buscar emails similares para ayudar en el debugging
+      const similarUsers = await User.find({ email: { $regex: emailLower.split('@')[0], $options: 'i' } }).limit(5);
+      if (similarUsers.length > 0) {
+        logger.info(`Usuarios similares encontrados: ${similarUsers.map(u => u.email).join(', ')}`);
+      }
       res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
+
+    logger.info(`Usuario encontrado: ${user.email} (ID: ${user._id})`);
 
     // Generar JWT
     const token = generateToken({
