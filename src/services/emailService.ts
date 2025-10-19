@@ -192,6 +192,145 @@ Castro, Chiloé
     logger.info(`📧 Email de tickets enviado a ${to} - ${cantidadTickets} tickets`);
   }
 
+  async sendBoardingPass({
+    to,
+    ticket,
+    flight,
+    pasajero,
+  }: {
+    to: string;
+    ticket: any;
+    flight: any;
+    pasajero: { nombre: string; apellido: string; rut: string; esMenor?: boolean };
+  }): Promise<void> {
+    const APP_URL = process.env.FRONTEND_URL || 'https://fila-aerea-frontend.vercel.app';
+    const BOARDING_PASS_URL = `${APP_URL}/mi-pase?ticket=${ticket._id}`;
+
+    // Formatear hora prevista de salida
+    const horaSalida = flight.hora_prevista_salida
+      ? new Date(flight.hora_prevista_salida).toLocaleTimeString('es-CL', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'UTC',
+        })
+      : 'Por confirmar';
+
+    const fechaVuelo = new Date(flight.fecha_hora).toLocaleDateString('es-CL', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Tu Pase de Embarque - Club Aéreo de Castro</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #2563eb; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">✈️ Club Aéreo de Castro</h1>
+        </div>
+
+        <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+          <h2 style="color: #2563eb; margin-top: 0;">¡Tu Vuelo ha sido Confirmado!</h2>
+
+          <p>Hola <strong>${pasajero.nombre} ${pasajero.apellido}</strong>,</p>
+
+          <p>Te confirmamos tu inscripción en el siguiente vuelo:</p>
+
+          <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #2563eb;">
+            <h3 style="margin-top: 0; color: #1e40af; text-align: center;">🎫 Pase de Embarque</h3>
+
+            <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0;">
+              <p style="margin: 8px 0;"><strong>Pasajero:</strong> ${pasajero.nombre} ${pasajero.apellido}</p>
+              <p style="margin: 8px 0;"><strong>RUT:</strong> ${pasajero.rut}</p>
+              ${pasajero.esMenor ? '<p style="margin: 8px 0; color: #f59e0b;"><strong>⚠️ MENOR DE EDAD</strong></p>' : ''}
+              <p style="margin: 8px 0;"><strong>Código de Ticket:</strong> <span style="font-family: monospace; background: #f3f4f6; padding: 4px 8px; border-radius: 3px;">${ticket.codigo_ticket}</span></p>
+            </div>
+
+            <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0;">
+              <p style="margin: 8px 0;"><strong>📅 Fecha:</strong> ${fechaVuelo}</p>
+              <p style="margin: 8px 0;"><strong>🕐 Hora prevista:</strong> ${horaSalida}</p>
+              <p style="margin: 8px 0;"><strong>✈️ Circuito:</strong> #${flight.numero_circuito}</p>
+              <p style="margin: 8px 0;"><strong>🛩️ Aeronave:</strong> ${flight.aircraftId?.matricula || 'Por asignar'} ${flight.aircraftId?.modelo ? `(${flight.aircraftId.modelo})` : ''}</p>
+              <p style="margin: 8px 0;"><strong>📍 Aeródromo:</strong> ${flight.aerodromo_salida || 'SCST'} - ${flight.aerodromo_llegada || 'SCST'}</p>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${BOARDING_PASS_URL}" style="display: inline-block; background-color: #2563eb; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+              📱 Ver mi Pase de Embarque
+            </a>
+          </div>
+
+          <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 5px;">
+            <p style="margin: 0; color: #92400e;">
+              <strong>⚠️ Importante:</strong> Los horarios de los vuelos pueden sufrir cambios debido a condiciones climáticas u operacionales.
+              Te notificaremos de cualquier cambio por email y en la aplicación.
+            </p>
+          </div>
+
+          <div style="background-color: #dcfce7; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 5px;">
+            <p style="margin: 0; color: #166534;">
+              <strong>✅ Presentación:</strong> Debes presentar tu código QR al momento de abordar.
+              Puedes acceder a él desde el link de arriba o ingresando a tu cuenta en la aplicación.
+            </p>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+          <p style="color: #6b7280; font-size: 14px; text-align: center; margin: 0;">
+            Si tienes alguna pregunta, no dudes en contactarnos.<br>
+            <strong>Club Aéreo de Castro</strong><br>
+            Castro, Chiloé
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const textContent = `
+Club Aéreo de Castro - Tu Pase de Embarque
+
+Hola ${pasajero.nombre} ${pasajero.apellido},
+
+¡Tu vuelo ha sido confirmado!
+
+DETALLES DEL VUELO:
+- Pasajero: ${pasajero.nombre} ${pasajero.apellido}
+- RUT: ${pasajero.rut}
+${pasajero.esMenor ? '- ⚠️ MENOR DE EDAD\n' : ''}- Código de Ticket: ${ticket.codigo_ticket}
+- Fecha: ${fechaVuelo}
+- Hora prevista: ${horaSalida}
+- Circuito: #${flight.numero_circuito}
+- Aeronave: ${flight.aircraftId?.matricula || 'Por asignar'}
+- Aeródromo: ${flight.aerodromo_salida || 'SCST'} - ${flight.aerodromo_llegada || 'SCST'}
+
+Ver tu pase de embarque: ${BOARDING_PASS_URL}
+
+IMPORTANTE: Los horarios pueden sufrir cambios debido a condiciones climáticas u operacionales.
+Te notificaremos de cualquier cambio.
+
+Debes presentar tu código QR al momento de abordar.
+
+Club Aéreo de Castro
+Castro, Chiloé
+    `;
+
+    await this.send({
+      to,
+      subject: '✈️ Tu Pase de Embarque - Club Aéreo de Castro',
+      text: textContent,
+      html: htmlContent,
+    });
+
+    logger.info(`📧 Pase de embarque enviado a ${to} para ticket ${ticket.codigo_ticket}`);
+  }
+
   async send({ to, subject, text, html }: EmailOptions): Promise<void> {
     if (!this.transporter) {
       logger.info(`📧 [SIMULADO] Email a ${to}:\n${text}`);

@@ -388,6 +388,31 @@ export const inscribeTicket = async (req: AuthRequest, res: Response): Promise<v
 
     logger.info(`Ticket ${ticket.codigo_ticket} inscrito en vuelo ${flight._id}`);
 
+    // Enviar email con pase de embarque
+    try {
+      const { User } = await import('../models');
+      const user = await User.findById(userId);
+      if (user && user.email) {
+        const { emailService } = await import('../services/emailService');
+
+        // Poblar aircraftId si no está poblado
+        if (!flight.aircraftId || typeof flight.aircraftId === 'string') {
+          await flight.populate('aircraftId');
+        }
+
+        await emailService.sendBoardingPass({
+          to: user.email,
+          ticket: ticket.toObject(),
+          flight: flight.toObject(),
+          pasajero: ticket.pasajeros[0],
+        });
+        logger.info(`📧 Pase de embarque enviado a ${user.email}`);
+      }
+    } catch (emailError) {
+      // No fallar la inscripción si el email falla
+      logger.error('Error al enviar email de pase de embarque:', emailError);
+    }
+
     res.json({
       message: 'Ticket inscrito exitosamente',
       ticket,
