@@ -77,20 +77,6 @@ export const registerPassenger = async (
       return;
     }
 
-    // Validar que si hay menores, haya al menos un adulto
-    if (pasajeros && Array.isArray(pasajeros)) {
-      const pasajerosConDatos = pasajeros.filter(p => p.nombre || p.apellido || p.rut);
-      const menores = pasajerosConDatos.filter(p => p.esMenor === true);
-      const adultos = pasajerosConDatos.filter(p => !p.esMenor);
-
-      if (menores.length > 0 && adultos.length === 0) {
-        res.status(400).json({
-          error: 'Si hay menores de edad en la reserva, debe haber al menos un adulto',
-        });
-        return;
-      }
-    }
-
     // Verificar si el email ya existe
     const emailLower = email.toLowerCase().trim();
     const existingUser = await User.findOne({ email: emailLower });
