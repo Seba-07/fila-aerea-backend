@@ -406,15 +406,20 @@ export const updateTicketPassengers = async (
       return;
     }
 
-    // Validar que si hay menores, haya al menos un adulto en el ticket
-    const menores = pasajeros.filter(p => p.esMenor === true);
-    const adultos = pasajeros.filter(p => !p.esMenor);
+    // Validar menores/adultos solo si NO es un infante
+    // Un infante viaja en brazos de un adulto que está en OTRO ticket
+    const esInfante = pasajeros.some(p => p.esInfante === true);
 
-    if (menores.length > 0 && adultos.length === 0) {
-      res.status(400).json({
-        error: 'Si hay menores de edad en el ticket, debe haber al menos un adulto',
-      });
-      return;
+    if (!esInfante) {
+      const menores = pasajeros.filter(p => p.esMenor === true && !p.esInfante);
+      const adultos = pasajeros.filter(p => !p.esMenor);
+
+      if (menores.length > 0 && adultos.length === 0) {
+        res.status(400).json({
+          error: 'Si hay menores de edad en el ticket, debe haber al menos un adulto',
+        });
+        return;
+      }
     }
 
     // Verificar si cambió el estado de infante (para ajustar asientos ocupados)
