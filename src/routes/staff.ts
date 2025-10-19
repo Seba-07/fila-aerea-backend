@@ -14,6 +14,7 @@ import {
   deleteCircuito,
   validateQR,
 } from '../controllers/staffController';
+import { fixInfantSeats } from '../controllers/fixInfantsController';
 import {
   getAircrafts,
   createAircraft,
@@ -58,5 +59,8 @@ router.patch('/aircrafts/:aircraftId/toggle', authenticate, requireStaff, toggle
 router.post('/refuelings', authenticate, requireStaff, createRefueling);
 router.get('/refuelings', authenticate, requireStaff, getAllRefuelings);
 router.get('/refuelings/:aircraftId', authenticate, requireStaff, getRefuelingsByAircraft);
+
+// Utilidad para corregir asientos de infantes
+router.post('/fix-infant-seats', authenticate, requireStaff, fixInfantSeats);
 
 export default router;
