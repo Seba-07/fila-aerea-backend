@@ -417,17 +417,49 @@ export const updateTicketPassengers = async (
       return;
     }
 
+    // Verificar si cambió el estado de infante (para ajustar asientos ocupados)
+    const eraInfante = ticket.pasajeros[0]?.esInfante === true;
+    const esInfanteAhora = pasajeros[0]?.esInfante === true;
+
     ticket.pasajeros = pasajeros.map(p => ({
       nombre: p.nombre || '',
       apellido: p.apellido || '',
       rut: p.rut || '',
       esMenor: p.esMenor || false,
+      esInfante: p.esInfante || false,
     }));
 
     // El estado se mantiene según el vuelo: si tiene flightId es 'inscrito', sino 'disponible'
     // No cambiamos el estado aquí, solo los datos de pasajeros
 
     await ticket.save();
+
+    // Ajustar asientos ocupados si cambió el estado de infante y está inscrito en un vuelo
+    if (ticket.flightId && eraInfante !== esInfanteAhora) {
+      const { Flight } = await import('../models');
+      const flight = await Flight.findById(ticket.flightId);
+
+      if (flight) {
+        if (!eraInfante && esInfanteAhora) {
+          // Cambió de pasajero normal a infante: liberar asiento
+          flight.asientos_ocupados = Math.max(0, flight.asientos_ocupados - 1);
+          await flight.save();
+          logger.info(`Asiento liberado en vuelo ${flight._id}: pasajero cambió a infante`);
+        } else if (eraInfante && !esInfanteAhora) {
+          // Cambió de infante a pasajero normal: ocupar asiento
+          if (flight.asientos_ocupados < flight.capacidad_total) {
+            flight.asientos_ocupados += 1;
+            await flight.save();
+            logger.info(`Asiento ocupado en vuelo ${flight._id}: infante cambió a pasajero normal`);
+          } else {
+            res.status(400).json({
+              error: 'No hay asientos disponibles para cambiar de infante a pasajero normal',
+            });
+            return;
+          }
+        }
+      }
+    }
 
     await EventLog.create({
       type: 'ticket_passengers_updated',
