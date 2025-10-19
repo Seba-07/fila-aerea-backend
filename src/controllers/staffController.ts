@@ -22,8 +22,11 @@ export const registerPassenger = async (
       flightId,
       monto_transferencia,
       monto_efectivo,
-      nombre_socio
+      nombre_socio,
+      tickets_bloqueados
     } = req.body;
+
+    const numTicketsBloqueados = tickets_bloqueados || 0;
 
     if (!nombre || !apellido || !email || !cantidad_tickets || !metodo_pago || monto === undefined) {
       res.status(400).json({
@@ -104,6 +107,9 @@ export const registerPassenger = async (
       const codigo_ticket = `TKT-${baseTimestamp}-${i}-${random}`;
       const pasajeroData = pasajeros && pasajeros[i - 1];
 
+      // Los últimos numTicketsBloqueados tickets se marcan como bloqueados
+      const esBloqueado = i > (cantidad_tickets - numTicketsBloqueados);
+
       const pasajeroInfo = pasajeroData && (pasajeroData.nombre || pasajeroData.apellido || pasajeroData.rut)
         ? [{
             nombre: pasajeroData.nombre || '',
@@ -119,31 +125,37 @@ export const registerPassenger = async (
         pasajeros: pasajeroInfo,
         estado: pasajeroInfo.length > 0 && flightId ? 'inscrito' : 'disponible',
         flightId: pasajeroInfo.length > 0 && flightId ? flightId : undefined,
+        bloqueado: esBloqueado,
       });
     }
 
     const createdTickets = await Ticket.insertMany(tickets);
 
     // Registrar pago
+    const ticketsNormales = cantidad_tickets - numTicketsBloqueados;
+    const descripcionBase = numTicketsBloqueados > 0
+      ? `Compra inicial de ${ticketsNormales} ticket(s) con pasajero y ${numTicketsBloqueados} ticket(s) bloqueado(s)`
+      : `Compra inicial de ${cantidad_tickets} ticket(s)`;
+
     const paymentData: any = {
       userId: user._id,
       monto,
       metodo_pago,
       cantidad_tickets,
       tipo: 'compra',
-      descripcion: `Compra inicial de ${cantidad_tickets} ticket(s)`,
+      descripcion: descripcionBase,
     };
 
     // Si es pago combinado, agregar los montos
     if (metodo_pago === 'combinado') {
       paymentData.monto_transferencia = monto_transferencia;
       paymentData.monto_efectivo = monto_efectivo;
-      paymentData.descripcion = `Compra inicial de ${cantidad_tickets} ticket(s) - Transferencia: $${monto_transferencia}, Efectivo: $${monto_efectivo}`;
+      paymentData.descripcion = `${descripcionBase} - Transferencia: $${monto_transferencia}, Efectivo: $${monto_efectivo}`;
     }
 
     // Si es pago socio, agregar nombre del socio a la descripción
     if (metodo_pago === 'socio' && nombre_socio) {
-      paymentData.descripcion = `Compra inicial de ${cantidad_tickets} ticket(s) - Socio: ${nombre_socio}`;
+      paymentData.descripcion = `${descripcionBase} - Socio: ${nombre_socio}`;
     }
 
     await Payment.create(paymentData);
