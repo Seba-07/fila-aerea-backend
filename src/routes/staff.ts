@@ -60,7 +60,7 @@ router.post('/refuelings', authenticate, requireStaff, createRefueling);
 router.get('/refuelings', authenticate, requireStaff, getAllRefuelings);
 router.get('/refuelings/:aircraftId', authenticate, requireStaff, getRefuelingsByAircraft);
 
-// Utilidad para corregir asientos de infantes (temporal sin auth)
-router.post('/fix-infant-seats', fixInfantSeats);
+// Utilidad para corregir asientos de infantes
+router.post('/fix-infant-seats', authenticate, requireStaff, fixInfantSeats);
 
 export default router;

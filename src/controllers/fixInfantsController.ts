@@ -5,11 +5,11 @@ import { logger } from '../utils/logger';
 
 export const fixInfantSeats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    // Temporal: permitir sin autenticación para corrección única
-    // if (req.user?.rol !== 'staff') {
-    //   res.status(403).json({ error: 'No autorizado' });
-    //   return;
-    // }
+    // Solo staff puede ejecutar esto
+    if (req.user?.rol !== 'staff') {
+      res.status(403).json({ error: 'No autorizado' });
+      return;
+    }
 
     const flights = await Flight.find({ estado: { $ne: 'finalizado' } });
 
