@@ -21,7 +21,8 @@ export const registerPassenger = async (
       pasajeros,
       flightId,
       monto_transferencia,
-      monto_efectivo
+      monto_efectivo,
+      nombre_socio
     } = req.body;
 
     if (!nombre || !apellido || !email || !cantidad_tickets || !metodo_pago || monto === undefined) {
@@ -59,6 +60,14 @@ export const registerPassenger = async (
         });
         return;
       }
+    }
+
+    // Validar pago socio
+    if (metodo_pago === 'socio' && !nombre_socio) {
+      res.status(400).json({
+        error: 'Para pago de socio se requiere el nombre del socio',
+      });
+      return;
     }
 
     if (monto < 0) {
@@ -144,6 +153,11 @@ export const registerPassenger = async (
       paymentData.monto_transferencia = monto_transferencia;
       paymentData.monto_efectivo = monto_efectivo;
       paymentData.descripcion = `Compra inicial de ${cantidad_tickets} ticket(s) - Transferencia: $${monto_transferencia}, Efectivo: $${monto_efectivo}`;
+    }
+
+    // Si es pago socio, agregar nombre del socio a la descripción
+    if (metodo_pago === 'socio' && nombre_socio) {
+      paymentData.descripcion = `Compra inicial de ${cantidad_tickets} ticket(s) - Socio: ${nombre_socio}`;
     }
 
     await Payment.create(paymentData);
