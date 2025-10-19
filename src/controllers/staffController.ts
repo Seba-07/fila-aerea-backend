@@ -10,7 +10,19 @@ export const registerPassenger = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { nombre, apellido, rut, email, cantidad_tickets, metodo_pago, monto, pasajeros, flightId } = req.body;
+    const {
+      nombre,
+      apellido,
+      rut,
+      email,
+      cantidad_tickets,
+      metodo_pago,
+      monto,
+      pasajeros,
+      flightId,
+      monto_transferencia,
+      monto_efectivo
+    } = req.body;
 
     if (!nombre || !apellido || !email || !cantidad_tickets || !metodo_pago || monto === undefined) {
       res.status(400).json({
@@ -26,11 +38,27 @@ export const registerPassenger = async (
       return;
     }
 
-    if (!['transferencia', 'passline', 'efectivo'].includes(metodo_pago)) {
+    if (!['transferencia', 'passline', 'efectivo', 'socio', 'combinado'].includes(metodo_pago)) {
       res.status(400).json({
         error: 'Método de pago inválido',
       });
       return;
+    }
+
+    // Validar pago combinado
+    if (metodo_pago === 'combinado') {
+      if (!monto_transferencia || !monto_efectivo) {
+        res.status(400).json({
+          error: 'Para pago combinado se requieren monto_transferencia y monto_efectivo',
+        });
+        return;
+      }
+      if (monto_transferencia + monto_efectivo !== monto) {
+        res.status(400).json({
+          error: 'La suma de monto_transferencia y monto_efectivo debe ser igual al monto total',
+        });
+        return;
+      }
     }
 
     if (monto < 0) {
@@ -102,14 +130,23 @@ export const registerPassenger = async (
     const createdTickets = await Ticket.insertMany(tickets);
 
     // Registrar pago
-    await Payment.create({
+    const paymentData: any = {
       userId: user._id,
       monto,
       metodo_pago,
       cantidad_tickets,
       tipo: 'compra',
       descripcion: `Compra inicial de ${cantidad_tickets} ticket(s)`,
-    });
+    };
+
+    // Si es pago combinado, agregar los montos
+    if (metodo_pago === 'combinado') {
+      paymentData.monto_transferencia = monto_transferencia;
+      paymentData.monto_efectivo = monto_efectivo;
+      paymentData.descripcion = `Compra inicial de ${cantidad_tickets} ticket(s) - Transferencia: $${monto_transferencia}, Efectivo: $${monto_efectivo}`;
+    }
+
+    await Payment.create(paymentData);
 
     await EventLog.create({
       type: 'passenger_registered',
