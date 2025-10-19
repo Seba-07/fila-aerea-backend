@@ -5,6 +5,7 @@ export interface IPasajero {
   apellido: string;
   rut: string;
   esMenor: boolean;
+  esInfante?: boolean; // Menor de 2 años - no ocupa asiento
   autorizacion_url?: string; // URL del PDF de autorización para menores
 }
 
@@ -57,6 +58,10 @@ const ticketSchema = new Schema<ITicket>(
           trim: true,
         },
         esMenor: {
+          type: Boolean,
+          default: false,
+        },
+        esInfante: {
           type: Boolean,
           default: false,
         },

@@ -356,11 +356,16 @@ export const inscribeTicket = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // Verificar que hay asientos disponibles
-    const asientosDisponibles = flight.capacidad_total - flight.asientos_ocupados;
-    if (asientosDisponibles <= 0) {
-      res.status(400).json({ error: 'No hay asientos disponibles en este vuelo' });
-      return;
+    // Verificar si el pasajero es infante (< 2 años) - no ocupa asiento
+    const esInfante = ticket.pasajeros[0]?.esInfante === true;
+
+    // Verificar que hay asientos disponibles (solo si no es infante)
+    if (!esInfante) {
+      const asientosDisponibles = flight.capacidad_total - flight.asientos_ocupados;
+      if (asientosDisponibles <= 0) {
+        res.status(400).json({ error: 'No hay asientos disponibles en este vuelo' });
+        return;
+      }
     }
 
     // Inscribir el ticket
@@ -368,9 +373,11 @@ export const inscribeTicket = async (req: AuthRequest, res: Response): Promise<v
     ticket.estado = 'inscrito';
     await ticket.save();
 
-    // Incrementar asientos ocupados
-    flight.asientos_ocupados += 1;
-    await flight.save();
+    // Incrementar asientos ocupados solo si no es infante
+    if (!esInfante) {
+      flight.asientos_ocupados += 1;
+      await flight.save();
+    }
 
     // Registrar en event log
     const { EventLog } = await import('../models');
